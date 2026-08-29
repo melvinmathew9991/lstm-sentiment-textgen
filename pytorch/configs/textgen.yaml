@@ -1,0 +1,48 @@
+# Next-word text generation -- many-to-one LSTM over Alice in Wonderland.
+# Relative paths resolve against THIS FILE's directory (pytorch/configs/).
+
+task: textgen
+seed: 42
+device: auto
+
+data:
+  text: ../../data/alice.txt
+  seq_len: 10
+  stride: 1
+  val_fraction: 0.10      # trailing block of STRIPPED prose (standard LM
+                          # practice). Safe only because strip_gutenberg removed
+                          # the licence text that used to occupy this slice (D6).
+  min_freq: 1             # train-only vocab = 2,436. Measured 2026-08-29:
+                          # min_freq=2 makes 4.34% of TRAINING TARGETS <unk>,
+                          # which the model then learns to emit. Generation
+                          # quality beats the smaller embedding table here.
+  strip_gutenberg: true   # 164,045 -> 144,607 chars; fixes D6
+
+model:
+  embed_dim: 128
+  hidden_dim: 256
+  num_layers: 1
+  dropout: 0.0
+
+train:
+  batch_size: 128
+  epochs: 60
+  lr: 2.0e-3
+  weight_decay: 0.0
+  clip_grad_norm: 5.0
+  class_weighting: none
+  num_workers: 0
+  early_stopping:
+    monitor: val_loss
+    mode: min
+    patience: 5
+    min_delta: 0.0
+
+generate:
+  seed_text: "alice was beginning to"   # replaces input_words[-28701] (D10)
+  n_words: 40
+  temperature: 0.7
+  top_k: 40
+
+output:
+  dir: ../runs/textgen
