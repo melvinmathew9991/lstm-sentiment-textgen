@@ -48,6 +48,26 @@ jobs:
           python -m lstm_nlp.cli --help
           lstm-nlp --version
 
+  audit:
+    name: project audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0      # the audit inspects commit messages and tags
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install
+        working-directory: pytorch
+        run: |
+          pip install -r requirements.txt --extra-index-url https://download.pytorch.org/whl/cpu
+          pip install -e .
+      - name: End-to-end project audit
+        working-directory: pytorch
+        run: python scripts/audit.py
+
   lint:
     name: lint
     runs-on: ubuntu-latest

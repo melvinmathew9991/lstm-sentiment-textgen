@@ -1,7 +1,14 @@
 # Phases — PyTorch Migration Plan
 
 Ten phases, each independently verifiable. Do not start a phase before the previous one's exit criteria pass (`Rules.md` A2).
-Every phase ends with: run the verification command, paste the real output, update `Memory.md`.
+Every phase ends with **all four** of:
+
+1. Run the phase's own **Verify** command; paste the real output.
+2. Run the **end-to-end project audit** — `python scripts/audit.py` — and paste its summary. Zero FAIL is required to merge (`Rules.md` §11).
+3. Update `Memory.md` and `CHANGELOG.md`.
+4. Branch → PR → squash-merge → annotated tag (`Rules.md` §10).
+
+Step 2 is what keeps the standards project-wide rather than phase-local: it re-checks every earlier phase, every document and the git history, not just the code just written.
 
 **Dependency chain**
 

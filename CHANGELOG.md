@@ -7,6 +7,16 @@ Defect IDs (D1-D11) refer to `PRD.md` section 1.1.
 
 ## [Unreleased]
 
+### Added
+- `pytorch/scripts/audit.py`: end-to-end project audit, 23 checks across tests,
+  standards conformance, documentation consistency and git hygiene. Run after
+  every phase; non-zero exit on any failure. Wired into CI as its own job.
+
+### Fixed
+- `Rules.md` A4 cited a superseded one-hot figure (707 MB) in the very rule
+  that forbids inventing numbers. Corrected to 931 MB.
+- Docstrings added to four public properties.
+
 ### Planned
 - Phase 2: sentiment model, trainer, metrics, checkpoints (closes D4, D5, D8, D11)
 - Phase 3: text-generation model and trainer (closes D6, D9)

@@ -37,6 +37,7 @@ class SentimentSplits:
 
     @property
     def num_classes(self) -> int:
+        """Number of sentiment classes (2: negative, positive)."""
         return len(LABEL_NAMES)
 
 
@@ -80,6 +81,7 @@ class SentimentDataset(Dataset):
 
     @property
     def label_counts(self) -> dict[str, int]:
+        """Rows per class, keyed by label name."""
         return {name: self.labels.count(i) for i, name in enumerate(LABEL_NAMES)}
 
     def unknown_rate(self) -> float:

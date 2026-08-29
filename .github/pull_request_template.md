@@ -13,6 +13,13 @@
 ```
 ```
 
+## Project audit
+
+<!-- python scripts/audit.py -- paste the summary line. Zero FAIL required. -->
+
+```
+```
+
 ## Checklist
 
 - [ ] `pytest` green, output pasted above
@@ -20,6 +27,8 @@
 - [ ] No banned import introduced (`Rules.md` section 2)
 - [ ] No new magic number outside a config file (C13)
 - [ ] Metrics reported beside their baselines (C11/C16)
+- [ ] `python scripts/audit.py` run, zero FAIL, summary pasted above
+- [ ] Any WARN triaged: fixed, or recorded in `Memory.md` under Deferred
 - [ ] `Memory.md` updated with the phase entry
 - [ ] `CHANGELOG.md` updated
 - [ ] No trailers in any commit message (`Rules.md` section 10)
