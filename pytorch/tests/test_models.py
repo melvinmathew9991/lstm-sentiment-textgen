@@ -101,3 +101,105 @@ def test_length_one_sequence(model: SentimentLSTM) -> None:
     """An empty tweet encodes to a single <unk>; that must not crash."""
     out = model(torch.tensor([[1]]), torch.tensor([1]))
     assert out.shape == (1, 2)
+
+
+# =========================================================================== #
+# TextGenLSTM  (Phase 3)
+# =========================================================================== #
+
+from lstm_nlp.models.textgen_lstm import TextGenLSTM  # noqa: E402
+
+
+@pytest.fixture
+def lm() -> TextGenLSTM:
+    torch.manual_seed(0)
+    return TextGenLSTM(vocab_size=60, embed_dim=16, hidden_dim=24, num_layers=1)
+
+
+def test_textgen_forward_shape(lm: TextGenLSTM) -> None:
+    """A batch of 10-word windows scores every word in the vocabulary."""
+    out = lm(torch.randint(0, 60, (4, 10)))
+    assert out.shape == (4, 60)
+    assert out.dtype == torch.float32
+
+
+def test_textgen_returns_logits_not_probabilities(lm: TextGenLSTM) -> None:
+    """C1, and the structural half of the D2 fix.
+
+    With no probability vector in existence, the reference's mistake -- dividing
+    probabilities by the temperature -- cannot be written here.
+    """
+    lm.eval()
+    with torch.no_grad():
+        out = lm(torch.randint(0, 60, (2, 10)))
+    assert abs(out[0].sum().item() - 1.0) > 1e-3, "output sums to 1: the model is softmaxing"
+    assert bool((out < 0).any()), "all-positive output suggests a softmax or relu head"
+
+
+def test_textgen_uses_only_the_final_hidden_state(lm: TextGenLSTM) -> None:
+    """Many-to-one: one prediction per window, not one per timestep."""
+    out = lm(torch.randint(0, 60, (3, 10)))
+    assert out.ndim == 2, "a many-to-many model would return (B, seq_len, V)"
+
+
+def test_textgen_windows_are_independent(lm: TextGenLSTM) -> None:
+    lm.eval()
+    window = torch.randint(0, 60, (1, 10))
+    other = torch.randint(0, 60, (1, 10))
+    with torch.no_grad():
+        alone = lm(window)
+        batched = lm(torch.cat([window, other]))
+    assert torch.allclose(alone[0], batched[0], atol=1e-6)
+
+
+def test_textgen_parameter_count_matches_the_specification() -> None:
+    """Architecture.md section 3.2 states 1,333,124 at the real vocabulary."""
+    model = TextGenLSTM(vocab_size=2436, embed_dim=128, hidden_dim=256, num_layers=1)
+    assert model.num_parameters() == 1_333_124
+
+
+def test_textgen_config_round_trips() -> None:
+    original = TextGenLSTM(vocab_size=77, embed_dim=32, hidden_dim=48, num_layers=2, dropout=0.1)
+    rebuilt = TextGenLSTM(**original.config())
+    assert rebuilt.config() == original.config()
+    rebuilt.load_state_dict(original.state_dict())
+
+
+def test_textgen_input_is_indices_not_onehot(lm: TextGenLSTM) -> None:
+    """D9 at the model boundary: the model consumes int64 indices."""
+    out = lm(torch.randint(0, 60, (2, 10), dtype=torch.int64))
+    assert out.shape == (2, 60)
+    with pytest.raises((RuntimeError, IndexError)):
+        lm(torch.zeros(2, 10, 60))  # a one-hot tensor must not be accepted
+
+
+# =========================================================================== #
+# the trainer is task-agnostic  (Phase 3 exit criterion)
+# =========================================================================== #
+
+
+def test_trainer_contains_no_task_specific_code() -> None:
+    """Phase 3 had to reuse engine/trainer.py unchanged.
+
+    If the loop ever needs to know which task it is running, the abstraction is
+    wrong and the abstraction gets fixed -- not the loop.
+    """
+    import ast
+    from pathlib import Path
+
+    path = Path(__file__).resolve().parents[1] / "src" / "lstm_nlp" / "engine" / "trainer.py"
+    tree = ast.parse(path.read_text(encoding="utf-8"))
+
+    # Scan CODE, not prose. The module docstring legitimately says the loop
+    # knows nothing about sentiment or text generation; that sentence is not a
+    # dependency on either.
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Module | ast.ClassDef | ast.FunctionDef | ast.AsyncFunctionDef):
+            body = node.body
+            if body and isinstance(body[0], ast.Expr) and isinstance(body[0].value, ast.Constant):
+                if isinstance(body[0].value.value, str):
+                    node.body = body[1:] or [ast.Pass()]
+
+    code = ast.unparse(tree).lower()
+    for word in ("sentiment", "textgen", "vocab", "tweet", "perplexity", "macro_f1"):
+        assert word not in code, f"trainer.py code references {word!r}; it must stay task-agnostic"

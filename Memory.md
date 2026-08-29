@@ -320,3 +320,59 @@ Under the reference's preprocessing each pair was **identical** after stopword r
 `models/textgen_lstm.py`: `Embedding(2436,128)` → `LSTM(128,256)` → `h_n[-1]` → `Linear(256,2436)`, ≈1,333,124 params. **Reuse `engine/trainer.py` unchanged.** Gate: perplexity ≤ 400 vs the **2,436** uniform baseline, RSS < 2 GB, < 20 min CPU.
 The ≤400 target is still an unvalidated guess; report the real number rather than adjusting the target to fit it.
 Branch `phase-3-textgen`, tag `v0.4.0`.
+
+---
+
+## Phase 3 — Text-generation model & training ✅ complete (2026-08-29)
+
+**Closes D6, D9.**
+
+### Result
+
+```
+                    value    baseline      ratio
+  perplexity       223.54        2436      10.90x better
+  cross-entropy    5.4096      7.7981
+  top-1 accuracy   0.1482    0.000411      360x better
+```
+
+2m47s on CPU (budget 20 min). Early stopping fired at epoch 7, restored epoch **2**. 1,333,124 parameters, exactly as specified. **231 tests pass.**
+
+Gate S4 was perplexity ≤ 400 — the target I flagged as an unvalidated guess. It landed at **223.54**, so the guess was reasonable. Recording that it was checked rather than adjusted.
+
+### Memory (D9), measured
+```
+  peak process RSS         421 MB    criterion < 2,000 MB
+  RSS before data load     293 MB    torch import alone
+  dataset storage         0.22 MB    int64 indices, lazily sliced
+  same windows one-hot     668 MB    at our V=2,436
+  reference actual         931 MB    modular_code, V=3,036, unstripped
+```
+The whole training process uses **less memory than the reference's input array alone**.
+
+### Built
+- `models/textgen_lstm.py` — `Embedding(2436,128)` → `LSTM(128,256)` → `h_n[-1]` → `Linear(256,2436)`. Returns logits.
+- `engine/textgen_task.py` — wiring, `evaluate_textgen`, `format_textgen_metrics`.
+- `TextGenLSTM` in the checkpoint registry; `describe()` gained perplexity-with-baseline.
+- CLI `train`/`eval` dispatch on the task discriminator.
+
+### Decisions
+1. **`engine/trainer.py` reused with zero changes** — the Phase 3 exit criterion. A new test parses the file with `ast`, strips docstrings, and asserts its *code* mentions neither task. The loop cannot quietly acquire task-specific branches later.
+2. **Perplexity recomputed from logits** in `textgen_metrics` rather than taken from the running loss, so it stays correct if the criterion is ever weighted or reduced differently.
+3. **Training windows are shuffled; the split is not.** The contiguous block split is what prevents leakage (D6); the order training windows arrive in carries no information worth preserving.
+4. **The head is the biggest part of the model** — 626,052 of 1,333,124 params. That is what a word-level softmax costs, and it is the thing that would need attention if the vocabulary grew.
+
+### Surprises / corrections
+- **Best epoch is 2 of 7.** The model overfits a 24,687-token corpus almost immediately. Expected for a corpus this small, and exactly why early stopping is not optional here. Worth stating plainly: this is a *demonstration* language model, locally fluent at best.
+- **My first "trainer is task-agnostic" test was too naive** — it string-matched the whole file and tripped on the module docstring, which legitimately *says* the loop knows nothing about sentiment or text generation. Rewrote it to parse with `ast` and strip docstrings before scanning. Same discipline as the audit: make the check precise, never loosen it.
+- **The Bash heredoc mangles backslashes even with a quoted delimiter** on this machine, corrupting `\n` inside Python string literals. It silently produced a syntax error in `cli.py` earlier. From now on: write patch scripts to the scratchpad with the Write tool and run them, rather than piping Python through a heredoc.
+
+### Audit
+**21 pass · 1 warn · 0 fail · 1 skip.**
+
+### Next: Phase 4 — Sampling & generation
+**The most important phase in the plan: it closes D2.**
+Build `inference/sampler.py` (`apply_top_k`, `sample_from_logits`) and `inference/predictor.py`.
+Gate S5: entropy strictly increases across T ∈ {0.2, 0.5, 1.0, 1.5, 2.0}; T=0.01 matches greedy argmax on ≥99% of 1,000 draws; `top_k=5` yields at most 5 distinct tokens over 10,000 draws; same `rng_seed` gives identical text.
+S15: five passages at T=0.7 containing no Gutenberg vocabulary — already guaranteed structurally, since those words have no index.
+Both trained checkpoints exist under `runs/`. Branch `phase-4-sampling`, tag `v0.5.0`.
