@@ -160,7 +160,7 @@ The original course materials (`modular_code/`, `notebook/`, the solution PDF) a
 | 1 · Data layer | ✅ | D3, D6, D7, D9 |
 | 2 · Sentiment model | ✅ | D4, D5, D8, D11 |
 | 3 · Text-gen model | ✅ | D6, D9 |
-| 4 · Sampling | ⬜ | **D2**, D10 |
+| 4 · Sampling | ✅ | **D2**, D10 |
 | 5 · CLI | ⬜ | **D1**, D10 |
 | 6 · FastAPI backend | ⬜ | — |
 | 7 · Streamlit frontend | ⬜ | — |

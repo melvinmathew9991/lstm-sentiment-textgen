@@ -1,11 +1,11 @@
 """Command-line entry point: ``train``, ``eval``, ``predict``, ``generate``.
 
-Phase 0 wires argument parsing and dispatch only; the handlers raise
-``NotImplementedError`` until their phases land (see ``Phases.md``).
-
 Dispatch is deliberately explicit and covered by a test.  The reference
 implementation died at ``engine.py:48`` because a call site passed 4 of 7
 required arguments and nothing checked (D1) -- after ~100 epochs of training.
+
+Generation defaults come from the run's ``config.yaml``; an explicit flag
+overrides. No sampling literal lives in this file (D10, ``Rules.md`` C13).
 """
 
 from __future__ import annotations
@@ -114,13 +114,78 @@ def cmd_eval(args: argparse.Namespace) -> int:
 
 
 def cmd_predict(args: argparse.Namespace) -> int:
-    """Classify one or more texts with a sentiment checkpoint.  Phase 4."""
-    raise NotImplementedError("predict lands in Phase 4")
+    """Classify one or more texts with a sentiment checkpoint."""
+    from lstm_nlp.inference.predictor import SentimentPredictor
+
+    predictor = SentimentPredictor(args.ckpt)
+    baseline = predictor.metrics.get("baseline_accuracy")
+
+    for text in args.text:
+        result = predictor.predict(text)
+        print(f"  {text!r}")
+        print(f"    {result.label.upper():<9s} p(positive)={result.probabilities['positive']:.3f}")
+        if result.n_unk:
+            print(
+                f"    {result.n_unk} of {result.n_tokens} tokens unknown "
+                f"({100 * result.unk_rate:.0f}%) -- treat with caution"
+            )
+    if baseline is not None:
+        print(f"\n  model test accuracy {predictor.metrics['accuracy']:.4f} "
+              f"(majority-class baseline {baseline:.4f}, "
+              f"macro-F1 {predictor.metrics['macro_f1']:.4f} vs "
+              f"{predictor.metrics['baseline_macro_f1']:.4f})")
+    return EXIT_OK
 
 
 def cmd_generate(args: argparse.Namespace) -> int:
-    """Generate text from a seed with temperature sampling.  Phase 4."""
-    raise NotImplementedError("generate lands in Phase 4")
+    """Generate text from a seed, sampling logits at a temperature.
+
+    Defaults come from the run's config so no literal lives here; an explicit
+    flag overrides. This is what replaced the reference's
+    ``input_words[-28701]`` magic index (D10).
+    """
+    from lstm_nlp.config import load_config
+    from lstm_nlp.inference.predictor import TextGenerator
+
+    generator = TextGenerator(args.ckpt)
+
+    seed_text, n_words, temperature, top_k = args.seed_text, args.n_words, args.temperature, args.top_k
+    run_config = Path(args.ckpt).parent / "config.yaml"
+    if run_config.is_file():
+        defaults = load_config(run_config).generate
+        seed_text = seed_text if seed_text is not None else defaults.seed_text
+        n_words = n_words if n_words is not None else defaults.n_words
+        temperature = temperature if temperature is not None else defaults.temperature
+        top_k = top_k if top_k is not None else defaults.top_k
+
+    if seed_text is None:
+        raise CheckpointError(
+            "no --seed given and the run's config.yaml is not beside the "
+            "checkpoint, so there is no default seed to fall back on"
+        )
+
+    result = generator.generate(
+        seed_text=seed_text,
+        n_words=n_words if n_words is not None else 40,
+        temperature=temperature if temperature is not None else 0.7,
+        top_k=top_k,
+        rng_seed=args.rng_seed,
+    )
+    print(f"  temperature {result.temperature}   top-k {result.top_k}   "
+          f"vocabulary {generator.vocab_size:,}")
+    if result.n_unk_in_seed:
+        print(f"  {result.n_unk_in_seed} seed word(s) unknown to the model")
+    print()
+    print(result.text)
+    print()
+
+    distribution = generator.next_word_distribution(seed_text, result.temperature, top_k, n=8)
+    print(f"  next-word distribution at T={result.temperature} "
+          f"(uniform would be {1 / generator.vocab_size:.6f}):")
+    for token, probability in distribution:
+        bar = "#" * max(1, round(probability * 40))
+        print(f"    {token:<16s} {probability:6.4f}  {bar}")
+    return EXIT_OK
 
 
 # --------------------------------------------------------------------------- #

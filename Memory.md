@@ -376,3 +376,68 @@ Build `inference/sampler.py` (`apply_top_k`, `sample_from_logits`) and `inferenc
 Gate S5: entropy strictly increases across T ∈ {0.2, 0.5, 1.0, 1.5, 2.0}; T=0.01 matches greedy argmax on ≥99% of 1,000 draws; `top_k=5` yields at most 5 distinct tokens over 10,000 draws; same `rng_seed` gives identical text.
 S15: five passages at T=0.7 containing no Gutenberg vocabulary — already guaranteed structurally, since those words have no index.
 Both trained checkpoints exist under `runs/`. Branch `phase-4-sampling`, tag `v0.5.0`.
+
+---
+
+## Phase 4 — Sampling & generation ✅ complete (2026-08-29)
+
+**Closes D2 and D10.** The most important phase in the plan: D2 is the defect the reference presented as a *feature*.
+
+### The D2 proof
+
+Entropy against temperature, measured on the trained model:
+
+```
+    T   entropy   % of uniform   top word      p
+ 0.20    1.0287          13.2%   her      0.6108
+ 0.70    3.4333          44.0%   her      0.1890
+ 1.00    5.3862          69.1%   her      0.0821
+ 2.00    7.4154          95.1%   her      0.0096
+ 5.00    7.7563          99.5%   her      0.0016
+```
+
+The reference's formulation on the **same model and seed**:
+
+```
+    T    correct   reference bug
+  0.5     2.2949          7.7981   <- ln(2436), exactly uniform
+  1.0     5.3862          7.7981
+  2.0     7.4154          7.7981
+ 10.0     7.7887          7.7981
+```
+
+Its curve is **flat at the uniform value at every temperature**. That is the whole of D2, measured rather than argued: it drew words at random from the entire vocabulary regardless of the setting, which is exactly what its saved notebook output shows.
+
+Generated text now visibly tracks the setting:
+```
+T=0.2  alice was beginning to her in the other and the queen s voice and the
+       queen s voice of the queen s voice          <- looping, near-greedy
+T=0.7  alice was beginning to the rabbit and she was nothing of them so he d
+       slipped to have learn there s always on a   <- varied, locally coherent
+T=2.5  alice was beginning to added we wider across course clock girls
+       understand so he d slipped fancying          <- incoherent
+```
+
+### Built
+- `inference/sampler.py` — `apply_top_k`, `temperature_distribution`, `sample_from_logits`, `greedy_from_logits`, `distribution_entropy`, `top_tokens`.
+- `inference/predictor.py` — `SentimentPredictor`, `TextGenerator`, plus `SentimentPrediction` / `Generation` result types.
+- CLI `predict` and `generate`.
+
+### Decisions
+1. **`temperature_distribution` is a separate function from `sample_from_logits`.** The frontend must chart *exactly* the distribution the sampler draws from (FR-34); two code paths would eventually disagree. `top_tokens` and `next_word_distribution` both build on it.
+2. **`MIN_TEMPERATURE = 1e-3` clamp** guards the division as T→0, while the config layer still rejects T ≤ 0 outright. Belt and braces at two different boundaries.
+3. **Short seeds are left-padded with `<unk>`, long ones truncated to the last `seq_len`.** The window length is a model constraint, not something a caller should have to know. Documented, not raised.
+4. **Both predictors report `n_unk`.** Not a debug field — a prediction resting on mostly-unknown input is uninformative and the caller must be able to see that. Surfaced through to the API contract.
+5. **`generate` reads its defaults from the run's `config.yaml`,** so no sampling literal lives in `cli.py`. This is what replaced `input_words[-28701]` (D10).
+6. **A test deliberately reproduces the D2 bug** and asserts it is indistinguishable from uniform. The cost of the defect is now recorded in the suite, not just described in prose.
+
+### Surprises / corrections
+- **My `top_k` test assertion was wrong, not the code.** I asserted that `top_k=3` over 200 generated words yields ≤ 30 distinct tokens. But top-k restricts the choice at *each step*, and across 200 different contexts the union is naturally much larger (54 observed). Replaced with the meaningful comparative property: at the same temperature and seed, top-k must produce fewer distinct words than unrestricted sampling. Third time this session a test caught my expectation rather than the implementation.
+- **The sentiment model calls "the flight was not great" positive (0.751).** Negation moves it correctly (0.977 → 0.751, gap 0.226) but not across the boundary. The corpus is 79.5% complaints, so "great" is a strong positive marker and one "not" does not overcome it. Honest limitation, consistent with the Phase 2 note.
+
+### Audit
+**21 pass · 1 warn · 0 fail · 1 skip.** 273 tests.
+
+### Next: Phase 5 — CLI
+Mostly done already: all four subcommands are implemented and working. Phase 5 is the *hardening* pass — `--max-steps` plumbed through both tasks, exit codes, running from any working directory, and `test_generate_command_signature` as the explicit D1 regression test.
+**Closes D1.** Branch `phase-5-cli`, tag `v0.6.0`.
