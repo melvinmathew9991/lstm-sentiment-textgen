@@ -15,7 +15,7 @@ import sys
 from pathlib import Path
 
 from lstm_nlp import __version__
-from lstm_nlp.errors import LstmNlpError
+from lstm_nlp.errors import CheckpointError, LstmNlpError
 from lstm_nlp.utils.logging import get_logger, setup_logging
 
 logger = get_logger(__name__)
@@ -31,13 +31,64 @@ EXIT_BAD_ARGS = 2
 
 
 def cmd_train(args: argparse.Namespace) -> int:
-    """Train a model from a config file.  Implemented in Phase 2 / Phase 3."""
-    raise NotImplementedError("train lands in Phase 2 (sentiment) / Phase 3 (textgen)")
+    """Train a model from a config file.
+
+    Text generation lands in Phase 3; until then that task reports cleanly
+    rather than half-running.
+    """
+    from lstm_nlp.config import load_config
+
+    cfg = load_config(args.config)
+    if cfg.task == "sentiment":
+        from lstm_nlp.engine.sentiment_task import train_sentiment
+
+        run_dir = train_sentiment(cfg, max_steps=args.max_steps)
+        print(f"\ncheckpoint: {run_dir / 'best.pt'}")
+        return EXIT_OK
+
+    raise NotImplementedError(f"training for task {cfg.task!r} lands in Phase 3")
 
 
 def cmd_eval(args: argparse.Namespace) -> int:
-    """Evaluate a checkpoint and print metrics beside their baselines.  Phase 2."""
-    raise NotImplementedError("eval lands in Phase 2")
+    """Evaluate a checkpoint, printing every metric beside its baseline."""
+    from lstm_nlp.data.sentiment import prepare_sentiment_data
+    from lstm_nlp.engine.sentiment_task import build_loaders, evaluate_report
+    from lstm_nlp.inference.checkpoint import build_model, describe, load_checkpoint
+    from lstm_nlp.utils.device import resolve_device
+
+    payload = load_checkpoint(args.ckpt)
+    print("Checkpoint\n" + describe(payload) + "\n")
+
+    if payload["task"] != "sentiment":
+        raise NotImplementedError(f"evaluation for task {payload['task']!r} lands in Phase 3")
+
+    run_config = Path(args.ckpt).parent / "config.yaml"
+    if not run_config.is_file():
+        raise CheckpointError(
+            f"cannot re-evaluate without the run's config.yaml (looked in "
+            f"{run_config.parent}); the checkpoint alone does not record where "
+            f"its data came from"
+        )
+
+    from lstm_nlp.config import load_config
+
+    cfg = load_config(run_config)
+    splits = prepare_sentiment_data(
+        cfg.data.csv,
+        test_size=cfg.data.test_size,
+        split_seed=cfg.data.split_seed,
+        stratify=cfg.data.stratify,
+        min_freq=cfg.data.min_freq,
+        max_len=cfg.data.max_len,
+    )
+    model = build_model(payload)
+    device = resolve_device(cfg.device)
+    model.to(device)
+
+    _, test_loader = build_loaders(splits, cfg.train.batch_size, cfg.seed)
+    report, _ = evaluate_report(model, test_loader, device)
+    print(f"Metrics on the {args.split} split\n" + report.format())
+    return EXIT_OK
 
 
 def cmd_predict(args: argparse.Namespace) -> int:

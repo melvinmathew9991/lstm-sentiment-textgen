@@ -127,8 +127,8 @@ Populated as phases complete. Every figure is measured, and every metric is repo
 
 | Metric | Baseline | Result |
 |---|---|---|
-| Sentiment accuracy | 0.7953 (majority class) | *pending P2* |
-| Sentiment macro-F1 | 0.4430 (majority class) | *pending P2* |
+| Sentiment accuracy | 0.7953 (majority class) | **0.8972**  (+0.1019) |
+| Sentiment macro-F1 | 0.4430 (majority class) | **0.8485**  (+0.4055) |
 | Text-gen perplexity | 2,436 (uniform over vocab) | *pending P3* |
 
 Note on the original's headline number: its 0.909 validation accuracy is **not** a target. It was produced by a model trained on negation-stripped text (D3), reported without a baseline it barely clears (D4), and saved at its worst epoch (D5). Reproducing it would not be evidence of anything. See [`PRD.md` §6.3](PRD.md).
@@ -158,7 +158,7 @@ The original course materials (`modular_code/`, `notebook/`, the solution PDF) a
 |---|---|---|
 | 0 · Scaffold | ✅ | — |
 | 1 · Data layer | ✅ | D3, D6, D7, D9 |
-| 2 · Sentiment model | ⬜ | D4, D5, D8, D11 |
+| 2 · Sentiment model | ✅ | D4, D5, D8, D11 |
 | 3 · Text-gen model | ⬜ | D6, D9 |
 | 4 · Sampling | ⬜ | **D2**, D10 |
 | 5 · CLI | ⬜ | **D1**, D10 |
