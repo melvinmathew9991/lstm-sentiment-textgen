@@ -24,7 +24,7 @@ from lstm_nlp.data.sentiment import (
 )
 from lstm_nlp.data.textgen import WindowDataset, prepare_textgen_data, split_tokens
 from lstm_nlp.errors import DataError
-from lstm_nlp.vocab import Vocab, UNPADDED_SPECIALS
+from lstm_nlp.vocab import UNPADDED_SPECIALS, Vocab
 
 # --------------------------------------------------------------------------- #
 # sentiment -- fast

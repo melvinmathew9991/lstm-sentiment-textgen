@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections import Counter
+from dataclasses import FrozenInstanceError
 
 import pytest
 
@@ -130,7 +131,7 @@ def test_misplaced_specials_rejected() -> None:
 
 def test_vocab_is_immutable() -> None:
     vocab = make({"a": 5})
-    with pytest.raises(Exception):
+    with pytest.raises(FrozenInstanceError):
         vocab.min_freq = 99
 
 
