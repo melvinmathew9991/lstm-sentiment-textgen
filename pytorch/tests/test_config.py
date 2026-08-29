@@ -7,6 +7,8 @@ from pathlib import Path
 import pytest
 import yaml
 
+from pydantic import ValidationError
+
 from lstm_nlp.config import SentimentConfig, TextGenConfig, dump_config, load_config
 from lstm_nlp.errors import ConfigError
 
@@ -149,5 +151,5 @@ def test_dump_then_load_round_trips(tmp_path: Path) -> None:
 
 def test_config_is_frozen() -> None:
     cfg = load_config(CONFIG_DIR / "sentiment.yaml")
-    with pytest.raises(Exception):  # pydantic raises ValidationError on frozen assignment
+    with pytest.raises(ValidationError):
         cfg.seed = 999
