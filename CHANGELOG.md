@@ -18,12 +18,51 @@ Defect IDs (D1-D11) refer to `PRD.md` section 1.1.
 - Docstrings added to four public properties.
 
 ### Planned
-- Phase 4: temperature sampling (closes **D2**)
 - Phase 5: CLI (closes **D1**)
 - Phase 6: FastAPI backend
 - Phase 7: Streamlit frontend
 - Phase 8: parity report
 - Phase 9: hardening
+
+## [0.5.0] - 2026-08-29 - Phase 4: Sampling & generation
+
+Closes **D2** and D10. D2 is the defect at the centre of the audit: the
+reference presented a uniformly-random sampler as a demonstration of softmax
+temperature.
+
+Measured on the trained model, entropy against temperature:
+
+      T   entropy   % of uniform
+   0.20    1.0287          13.2%
+   0.70    3.4333          44.0%
+   1.00    5.3862          69.1%
+   2.00    7.4154          95.1%
+   5.00    7.7563          99.5%
+
+The reference's formulation, on the same model and the same seed, produces
+7.7981 nats at every temperature -- exactly ln(2436), the entropy of a uniform
+distribution. Its curve is flat. It drew words at random from the whole
+vocabulary regardless of the setting, which is what its own saved notebook
+output shows.
+
+### Added
+- `inference/sampler.py`: `apply_top_k`, `temperature_distribution`,
+  `sample_from_logits`, `greedy_from_logits`, `distribution_entropy`,
+  `top_tokens`. Temperature scales logits and nothing else.
+- `inference/predictor.py`: `SentimentPredictor` and `TextGenerator`, each
+  constructed from a checkpoint and needing no other file. Both report how many
+  input tokens were unknown.
+- CLI `predict` and `generate`, with generation defaults read from the run's
+  config rather than written as literals.
+- 42 tests (273 total), including the S5 property gates.
+
+### Fixed
+- **D2**: `softmax(logits / T)`. Models return logits, so no probability vector
+  exists to divide by mistake -- the reference's error is unrepresentable here.
+  A test reproduces that error deliberately and asserts it is indistinguishable
+  from uniform, so the cost of the bug is recorded rather than described.
+- **D10**: the demo seed is a config value. `input_words[-28701]` has no
+  equivalent anywhere in the codebase.
 
 ## [0.4.0] - 2026-08-29 - Phase 3: Text-generation model & training
 

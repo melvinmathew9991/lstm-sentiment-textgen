@@ -349,7 +349,7 @@ Candidates, in rough value order:
 | P1 Data layer | ✅ **done** 2026-08-29 | D3, D6, D7, D9 | 146 tests green · measured values asserted |
 | P2 Sentiment | ✅ **done** 2026-08-29 | D4, D5, D8, D11 | macro-F1 **0.8485** vs 0.4430 · 213 tests |
 | P3 Text-gen | ✅ **done** 2026-08-29 | D6, D9 | ppl **223.54** vs 2,436 · RSS 421 MB |
-| P4 Sampling | ⬜ | **D2**, D10 | **S5** entropy monotonicity |
+| P4 Sampling | ✅ **done** 2026-08-29 | **D2**, D10 | entropy 1.03 -> 7.76 monotonic · 273 tests |
 | P5 CLI | ⬜ | **D1**, D10 | 4 commands from any CWD |
 | P6 FastAPI backend | ⬜ | — | all endpoints + 422/503 |
 | P7 Streamlit frontend | ⬜ | — | S17 · S18 · S19 · temperature visible |
