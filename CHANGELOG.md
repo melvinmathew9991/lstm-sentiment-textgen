@@ -18,14 +18,44 @@ Defect IDs (D1-D11) refer to `PRD.md` section 1.1.
 - Docstrings added to four public properties.
 
 ### Planned
-- Phase 2: sentiment model, trainer, metrics, checkpoints (closes D4, D5, D8, D11)
-- Phase 3: text-generation model and trainer (closes D6, D9)
 - Phase 4: temperature sampling (closes **D2**)
 - Phase 5: CLI (closes **D1**)
 - Phase 6: FastAPI backend
 - Phase 7: Streamlit frontend
 - Phase 8: parity report
 - Phase 9: hardening
+
+## [0.4.0] - 2026-08-29 - Phase 3: Text-generation model & training
+
+Closes D6, D9.
+
+Validation perplexity **223.54** against a uniform-guess baseline of 2,436 --
+10.9x better than random. Cross-entropy 5.4096 against 7.7981. Top-1 accuracy
+0.1482 against a 0.000411 chance rate. Trained in 2m47s on CPU against a
+20-minute budget; early stopping fired at epoch 7 and restored epoch 2.
+
+### Added
+- `models/textgen_lstm.py`: Embedding -> LSTM -> linear over the vocabulary,
+  1,333,124 parameters, taking `h_n[-1]` as the many-to-one reduction. Returns
+  raw logits.
+- `engine/textgen_task.py`: config-to-checkpoint wiring, perplexity and top-1
+  reported beside their baselines.
+- `TextGenLSTM` registered in the checkpoint model registry; `describe()` shows
+  perplexity beside its baseline.
+- CLI `train` and `eval` dispatch on the config's task discriminator.
+- 18 tests (231 total).
+
+### Fixed
+- **D6**: the model's vocabulary contains no Project Gutenberg licence token at
+  all, so it cannot emit one at any temperature. Asserted directly.
+- **D9**: peak training RSS is 421 MB -- less than the 931 MB the reference
+  allocated for its input array alone. Dataset storage is 0.22 MB of lazily
+  sliced int64 indices against 668 MB for the same windows one-hot.
+
+### Unchanged, deliberately
+- `engine/trainer.py` was reused with no modification. A test now parses it and
+  asserts its code references neither task, so the loop cannot quietly acquire
+  task-specific branches.
 
 ## [0.3.0] - 2026-08-29 - Phase 2: Sentiment model & training
 

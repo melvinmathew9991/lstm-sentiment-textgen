@@ -153,8 +153,12 @@ def build_model(payload: dict[str, Any]) -> torch.nn.Module:
         CheckpointError: If ``model_class`` is not one this package defines.
     """
     from lstm_nlp.models.sentiment_lstm import SentimentLSTM
+    from lstm_nlp.models.textgen_lstm import TextGenLSTM
 
-    registry: dict[str, type[torch.nn.Module]] = {"SentimentLSTM": SentimentLSTM}
+    registry: dict[str, type[torch.nn.Module]] = {
+        "SentimentLSTM": SentimentLSTM,
+        "TextGenLSTM": TextGenLSTM,
+    }
 
     name = payload["model_class"]
     if name not in registry:
@@ -191,5 +195,10 @@ def describe(payload: dict[str, Any]) -> str:
         lines.append(
             f"  accuracy        {metrics['accuracy']:.4f}"
             f"   baseline {metrics.get('baseline_accuracy', float('nan')):.4f}"
+        )
+    if "perplexity" in metrics:
+        lines.append(
+            f"  perplexity      {metrics['perplexity']:.2f}"
+            f"   baseline {metrics.get('baseline_perplexity', float('nan')):.0f}"
         )
     return "\n".join(lines)

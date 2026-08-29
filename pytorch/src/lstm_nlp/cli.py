@@ -33,8 +33,8 @@ EXIT_BAD_ARGS = 2
 def cmd_train(args: argparse.Namespace) -> int:
     """Train a model from a config file.
 
-    Text generation lands in Phase 3; until then that task reports cleanly
-    rather than half-running.
+    Dispatches on the config's ``task`` discriminator; both tasks share the
+    same trainer.
     """
     from lstm_nlp.config import load_config
 
@@ -43,10 +43,13 @@ def cmd_train(args: argparse.Namespace) -> int:
         from lstm_nlp.engine.sentiment_task import train_sentiment
 
         run_dir = train_sentiment(cfg, max_steps=args.max_steps)
-        print(f"\ncheckpoint: {run_dir / 'best.pt'}")
-        return EXIT_OK
+    else:
+        from lstm_nlp.engine.textgen_task import train_textgen
 
-    raise NotImplementedError(f"training for task {cfg.task!r} lands in Phase 3")
+        run_dir = train_textgen(cfg, max_steps=args.max_steps)
+
+    print(f"\ncheckpoint: {run_dir / 'best.pt'}")
+    return EXIT_OK
 
 
 def cmd_eval(args: argparse.Namespace) -> int:
@@ -59,9 +62,6 @@ def cmd_eval(args: argparse.Namespace) -> int:
     payload = load_checkpoint(args.ckpt)
     print("Checkpoint\n" + describe(payload) + "\n")
 
-    if payload["task"] != "sentiment":
-        raise NotImplementedError(f"evaluation for task {payload['task']!r} lands in Phase 3")
-
     run_config = Path(args.ckpt).parent / "config.yaml"
     if not run_config.is_file():
         raise CheckpointError(
@@ -73,6 +73,28 @@ def cmd_eval(args: argparse.Namespace) -> int:
     from lstm_nlp.config import load_config
 
     cfg = load_config(run_config)
+
+    if payload["task"] == "textgen":
+        from lstm_nlp.data.textgen import prepare_textgen_data
+        from lstm_nlp.engine.textgen_task import build_loaders as build_textgen_loaders
+        from lstm_nlp.engine.textgen_task import evaluate_textgen, format_textgen_metrics
+
+        splits = prepare_textgen_data(
+            cfg.data.text,
+            seq_len=cfg.data.seq_len,
+            stride=cfg.data.stride,
+            val_fraction=cfg.data.val_fraction,
+            min_freq=cfg.data.min_freq,
+            strip_boilerplate=cfg.data.strip_gutenberg,
+        )
+        model = build_model(payload)
+        device = resolve_device(cfg.device)
+        model.to(device)
+        _, val_loader = build_textgen_loaders(splits, cfg.train.batch_size, cfg.seed)
+        metrics = evaluate_textgen(model, val_loader, device, len(splits.vocab))
+        print("Validation metrics\n" + format_textgen_metrics(metrics))
+        return EXIT_OK
+
     splits = prepare_sentiment_data(
         cfg.data.csv,
         test_size=cfg.data.test_size,
