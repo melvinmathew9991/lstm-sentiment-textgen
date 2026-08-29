@@ -1,0 +1,27 @@
+# Normalise line endings for text so diffs stay clean across Windows/Linux.
+* text=auto eol=lf
+
+# Windows-native files keep CRLF.
+*.bat  text eol=crlf
+*.cmd  text eol=crlf
+*.ps1  text eol=crlf
+
+# Data: leave byte-for-byte alone. The measured character counts asserted in
+# the test suite are computed with universal-newline decoding, so they are
+# stable either way -- but the corpora are inputs, not source, and should not
+# be rewritten by a checkout.
+data/**  -text
+
+# Binary
+*.png binary
+*.gif binary
+*.pdf binary
+*.h5  binary
+*.pt  binary
+
+# Collapse notebooks in diffs; they are frozen reference material.
+*.ipynb linguist-generated=true -diff
+
+# Don't let the frozen reference skew language statistics.
+modular_code/** linguist-vendored
+notebook/**     linguist-vendored

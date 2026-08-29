@@ -1,0 +1,43 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.venv/
+venv/
+env/
+
+# Training artifacts -- never commit weights (Rules.md section 10)
+pytorch/runs/
+*.pt
+*.ckpt
+*.h5
+*.pth
+
+# The frozen reference's trained model: a build artifact, the overfit
+# final-epoch weights (D5), and unusable anyway -- its vocabulary was
+# never saved (D8).
+modular_code/output/sentiment_model.h5
+
+# Tooling
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+coverage.xml
+
+# Streamlit
+.streamlit/secrets.toml
+
+# Notebooks
+.ipynb_checkpoints/
+
+# OS / editors
+.DS_Store
+Thumbs.db
+desktop.ini
+.idea/
+.vscode/
+*.swp

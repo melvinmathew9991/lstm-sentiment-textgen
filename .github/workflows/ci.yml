@@ -1,0 +1,62 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: test (py${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.10", "3.12"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+
+      - name: Install (CPU torch only)
+        working-directory: pytorch
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt --extra-index-url https://download.pytorch.org/whl/cpu
+          pip install -e .
+
+      - name: Verify no GPU wheels were pulled
+        run: python -c "import torch; assert '+cu' not in torch.__version__, torch.__version__; print(torch.__version__)"
+
+      - name: Test
+        working-directory: pytorch
+        run: pytest -v
+
+      - name: CLI smoke
+        working-directory: pytorch
+        run: |
+          python -m lstm_nlp.cli --help
+          lstm-nlp --version
+
+  lint:
+    name: lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install ruff
+      # Non-blocking until Phase 9 (Rules.md section 9); surfaces drift meanwhile.
+      - run: ruff check pytorch/ --output-format=github || true
+      - run: ruff format --check pytorch/ || true
