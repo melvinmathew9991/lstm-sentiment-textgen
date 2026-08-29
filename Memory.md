@@ -14,7 +14,9 @@ Append one entry per phase. Newest at the bottom. Do not rewrite history.
 | **Why** | The TF version doesn't run to completion, and several things it teaches are provably wrong. 11 defects catalogued as D1–D11 in `PRD.md` §1.1 |
 | **Where** | New code in `pytorch/`. `modular_code/` and `notebook/` are **frozen references — never edit** (`Rules.md` B1) |
 | **Docs** | `PRD.md` (what) → `Architecture.md` (shape) → `Rules.md` (constraints) → `Phases.md` (order) |
-| **No `Design.md`** | Interface is CLI + JSON HTTP. No visual surface to design. Decision recorded in `PRD.md` §7 |
+| **Stack** | PyTorch core → FastAPI backend → Streamlit frontend. The frontend is a **pure API client** (`Rules.md` C15) |
+| **Repo** | https://github.com/melvinmathew9991/lstm-sentiment-textgen (public) · branch+PR+tag per phase, `Rules.md` §10 |
+| **`Design.md`** | Added 2026-08-29 when Streamlit gave the project a visual surface. It was correctly skipped while the interface was CLI + JSON |
 
 **Environment (verified 2026-08-29):** Windows 10, Python 3.10.11, **CPU-only** (`torch.cuda.is_available() == False`), torch 2.13.0+cpu.
 
@@ -157,3 +159,62 @@ TEXTGEN     tokens     24,687 + 2,742 = 27,429
 Build `models/sentiment_lstm.py`, `engine/{metrics,callbacks,trainer}.py`, `inference/checkpoint.py`; wire `train`/`eval`.
 **Closes D4, D5, D8, D11.** Gate: test macro-F1 ≥ 0.75 vs the **0.4430** baseline, early stopping demonstrably fires, checkpoint loads in a bare subprocess, and the negation test (S8) passes — that last one is the payoff for all of Phase 1's D3 work.
 Inputs ready: `prepare_sentiment_data(...)` → `SentimentSplits(train, test, vocab, class_weights=[1.0, 3.884])`, V=4,505, expected params ≈ 355,010.
+
+---
+
+## Interlude — Repository, git workflow, and full-stack scope change (2026-08-29)
+
+Between Phase 1 and Phase 2 the maintainer authorised git, and changed the scope from a two-tier (CLI + API) to a three-tier (CLI + API + UI) application.
+
+### Repository
+
+**https://github.com/melvinmathew9991/lstm-sentiment-textgen** — public.
+
+```
+2554d84  chore: initialise repository with specification and frozen reference
+ee72707  feat(config): add package scaffold, typed errors and validated config   (tag v0.1.0)
+38f720a  feat(data): add preprocessing, vocabulary and datasets                  (tag v0.2.0)
+897f173  chore(lint): resolve ruff findings and assert precise exception types
+```
+
+Added at repo root: `README.md`, `LICENSE` (MIT for code; datasets carry their own terms), `.gitignore`, `.gitattributes`, `CHANGELOG.md`, `.github/workflows/ci.yml`, PR and issue templates.
+
+### Workflow — follow this for every remaining phase
+
+```bash
+git switch -c phase-N-short-name
+# ... commits ...
+gh pr create --fill
+gh pr merge --squash --delete-branch
+git switch main && git pull
+git tag -a v0.X.0 -m "Phase N: <name>"
+git push --follow-tags
+```
+
+**Never commit directly to `main`.** **Never put a trailer in a commit message, PR body, or tag** — no `Co-Authored-By`, no session URL, no tool attribution. Standing maintainer instruction, recorded in `Rules.md` §10, and it overrides any default behaviour.
+
+Conventional Commits with scopes: `data` · `vocab` · `models` · `engine` · `inference` · `api` · `frontend` · `cli` · `config` · `docs` · `ci`.
+
+### CI
+
+GitHub Actions on push and PR: install with the CPU torch index, **assert no CUDA wheel was pulled**, run `pytest -v` on Python 3.10 and 3.12, smoke-test the CLI. A lint job runs `ruff` non-blocking (`|| true`) until Phase 9. All four runs so far are green.
+
+### Excluded from version control
+`runs/`, `*.pt`, `__pycache__/`, and `modular_code/output/sentiment_model.h5` — that last one is a build artifact, holds the overfit final-epoch weights (D5), and is unusable anyway because its vocabulary was never saved (D8).
+
+### Data licensing (public repo — this now matters)
+`airline_sentiment.csv` is **CC BY-NC-SA 4.0** (Figure Eight via Kaggle): attribution, **non-commercial**, share-alike, and those terms bind downstream use. `alice.txt` is Project Gutenberg #11, US public domain. Both are documented in `README.md` and `LICENSE`. The `realdata` test marker means the suite still passes if someone deletes `data/`.
+
+### Scope change: full-stack
+- **Phase 7 (Streamlit frontend) inserted.** Ten phases now; old P7/P8 became P8/P9.
+- **`Design.md` created.** I skipped it originally and said so explicitly — with a CLI + JSON interface there was no visual surface for a document about colour and typography to describe. Streamlit created one, so it now exists: palette with verified contrast ratios, typography, layout, components, error states, and the temperature visualisation.
+- **`Rules.md` C15**: the frontend never runs inference. No `torch`, no checkpoint, no `lstm_nlp.models` under `frontend/`. Two inference paths would mean two sets of results.
+- **`Rules.md` C16**: no metric shown in the UI without its baseline. C11 applied to pixels.
+- **New deps, all already installed:** `streamlit` 1.61.1, `httpx` 0.28.1, `altair` 6.2.2. Nothing to install.
+
+### Lint finding worth remembering
+`B017` flagged two `pytest.raises(Exception)` assertions. Fixing them properly exposed that `SentimentConfig` raises `ValidationError` while `Vocab` raises `FrozenInstanceError` — my first fix asserted the wrong one for `Vocab` and the suite caught it. A blind exception assertion in a test is the same failure mode the reference kept making in its source: it passes whether or not the code does what you think.
+
+### Next: Phase 2 — Sentiment model & training
+Unchanged by any of the above. Gate: macro-F1 ≥ 0.75 vs the **0.4430** baseline, early stopping demonstrably fires, checkpoint loads in a bare subprocess (S6), negation test passes (S8).
+Branch `phase-2-sentiment`, tag `v0.3.0` on merge.
