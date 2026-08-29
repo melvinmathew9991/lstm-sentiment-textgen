@@ -142,7 +142,7 @@ Custom exceptions live in `lstm_nlp/errors.py`, all subclassing `LstmNlpError`.
 | **A1** | **Read `Memory.md` first**, then the phase you are on in `Phases.md`. Do not re-read the whole codebase to rebuild context that is already written down. |
 | **A2** | **Work one phase at a time.** Do not start Phase N+1 before Phase N's exit criteria pass. |
 | **A3** | **Update `Memory.md` at the end of each phase** — what was built, decisions made, surprises found, what is next. That is its entire purpose. |
-| **A4** | **Do not invent numbers.** The measured values in these docs (4,505 vocab · 5.23% OOV · 27,429 tokens · 0.4430 baseline · 707 MB) were computed from the real data. If you need a new one, compute it and record how. |
+| **A4** | **Do not invent numbers.** The measured values in these docs (4,505 vocab · 5.23% OOV · 27,429 tokens · 0.4430 baseline · 931 MB reference one-hot) were computed from the real data. If you need a new one, compute it and record how. |
 | **A5** | **Do not claim a test passes without running it.** Paste real output. |
 | **A6** | **Do not expand scope.** No extra models, no plots, no notebooks, no README rewrites unless asked. If you spot something worth doing, note it in `Memory.md` under "Deferred" and move on. |
 | **A7** | **Do not "improve" the frozen reference** even where it is obviously wrong. That is the point of B1. |
@@ -164,6 +164,39 @@ A phase is done when **all** hold:
 6. `Memory.md` updated with the phase entry.
 7. The relevant `PRD.md` success criteria are ticked, or explicitly deferred with a reason.
 
+
+
+---
+
+## 11. End-of-phase evaluation
+
+A phase is not finished when its own gate passes. It is finished when the **whole project** still meets its standards.
+
+Standards that live only in a document decay: each phase adds code, and nothing forces the earlier phases, the documents, or the git history to stay consistent with it. So the standard is executable.
+
+```bash
+python scripts/audit.py            # full: includes the test suite
+python scripts/audit.py --fast     # skip tests, for a quick pass
+python scripts/audit.py -v         # show detail for passing checks too
+```
+
+**Run it after every phase, before opening the PR.** Paste the summary line into the PR body. It exits non-zero on any FAIL.
+
+### What it enforces
+
+| Group | Checks |
+|---|---|
+| **Tests** | Full suite green · a named regression test exists for every defect whose phase has landed |
+| **Standards** | No banned import · frontend purity (C15) · no bare/swallowing except · no import-time side effects (NFR-7) · type hints and docstrings on every public function · `from __future__ import annotations` · no mutable defaults · no hardcoded absolute paths · no undocumented TODO |
+| **Documentation** | All 8 specification documents present · **no superseded figure survives outside an explicit history note** · terminology (D11) · every headline baseline is documented · phase status agrees across `Phases.md`, `README.md` and `Memory.md` |
+| **Git** | Working tree clean · **no trailers in any commit** · Conventional Commit subjects · no weights tracked · **frozen reference untouched since the initial commit (B1)** · tags match completed phases · `CHANGELOG.md` covers every tag |
+
+### Rules for the audit itself
+
+1. **Never weaken a check to make it green.** When it fires, decide honestly whether the *code/doc* is wrong or the *check* is imprecise, and say which in the PR. Loosening a check to avoid work is the one change that makes this file worthless.
+2. **A new invariant means a new check.** Adding a rule to §3 without adding a check leaves it unenforced by the next phase.
+3. **A corrected measurement goes in `STALE_FIGURES`**, so the old value cannot quietly survive somewhere else in the docs.
+4. **`WARN` is not a pass.** It does not fail the build, but it is triaged in the PR — fixed, or recorded in `Memory.md` under Deferred with a reason.
 
 ---
 

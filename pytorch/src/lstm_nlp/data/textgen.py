@@ -38,6 +38,7 @@ class TextGenSplits:
 
     @property
     def n_tokens(self) -> int:
+        """Total tokens across both blocks."""
         return self.train.n_tokens + self.val.n_tokens
 
 
@@ -72,6 +73,7 @@ class WindowDataset(Dataset):
 
     @property
     def n_tokens(self) -> int:
+        """Tokens in this block. Window count is this minus ``seq_len``."""
         return len(self.ids)
 
     def storage_nbytes(self) -> int:

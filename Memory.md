@@ -218,3 +218,43 @@ GitHub Actions on push and PR: install with the CPU torch index, **assert no CUD
 ### Next: Phase 2 — Sentiment model & training
 Unchanged by any of the above. Gate: macro-F1 ≥ 0.75 vs the **0.4430** baseline, early stopping demonstrably fires, checkpoint loads in a bare subprocess (S6), negation test passes (S8).
 Branch `phase-2-sentiment`, tag `v0.3.0` on merge.
+
+---
+
+## Standing practice — end-to-end audit after every phase (2026-08-29)
+
+Maintainer instruction: evaluate the whole project after each phase, and hold the standards everywhere, not just in the newest code.
+
+Implemented as an executable gate rather than a promise, because a promise to check things decays and a script does not.
+
+### `pytorch/scripts/audit.py`
+
+```bash
+python scripts/audit.py          # full (runs the suite)
+python scripts/audit.py --fast   # skip tests
+python scripts/audit.py -v       # detail for passing checks too
+```
+
+23 checks in four groups — Tests, Standards, Documentation, Git. Non-zero exit on any FAIL. Wired into `Rules.md` §11, into every phase's exit criteria in `Phases.md`, into the PR template, and into CI as a separate `audit` job with `fetch-depth: 0` so it can read commit messages and tags.
+
+**Non-obvious checks worth knowing about:**
+- **`STALE_FIGURES`** — superseded measurements (`1,470`, `27,419`, `707 MB`, `961,214`) must not appear anywhere outside an explicit history note. This is how a correction is forced to propagate through all eight documents instead of being fixed in one place.
+- **No trailers in any commit** — the maintainer's standing instruction, now mechanically enforced over the whole history rather than remembered.
+- **Frozen reference untouched** — B1 checked as `git log -- modular_code notebook` having at most one commit.
+- **Phase status consistency** — `Phases.md`, `README.md` and `Memory.md` must agree on what is done.
+- **Defect coverage is phase-aware** — a defect whose closing phase hasn't landed reports as pending, not missing, so the check is meaningful from Phase 1 rather than only at the end.
+
+### First run found three things
+
+| Finding | Verdict |
+|---|---|
+| `Rules.md` A4 cited "707 MB" as a measured value | **Real bug.** A4 is the rule that says *don't invent numbers* and it was itself quoting a superseded figure. Fixed to 931 MB. |
+| `CHANGELOG.md` "…2,436 (not 1,470)…" flagged | **Check was wrong.** The historical marker sat two lines above the figure in a multi-line bullet. Made the check paragraph-aware. |
+| `Phases.md` `No "bag of words" in the new tree` flagged | **Check was wrong.** A prohibition of the term read as a use of it. Added prohibition words to the corrective-context list. |
+
+Plus 4 public properties without docstrings (WARN), fixed.
+
+Result: **21 pass · 1 warn · 0 fail · 1 skip**. The warn is the dirty working tree during the audit's own development; the skip is frontend purity, which has nothing to check until Phase 7.
+
+### The rule that matters most
+**Never weaken a check to make it green.** When it fires, decide honestly whether the code/doc is wrong or the check is imprecise, and say which in the PR. Two of the three first-run findings were check bugs and one was a real doc bug — recording which is which is the whole discipline.
