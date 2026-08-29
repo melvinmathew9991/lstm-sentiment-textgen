@@ -27,6 +27,45 @@ Defect IDs (D1-D11) refer to `PRD.md` section 1.1.
 - Phase 8: parity report
 - Phase 9: hardening
 
+## [0.3.0] - 2026-08-29 - Phase 2: Sentiment model & training
+
+Closes D4, D5, D8, D11.
+
+Test macro-F1 **0.8485** against a majority-class baseline of 0.4430
+(+0.4055). Accuracy 0.8972 against 0.7953. ROC-AUC 0.9366. Positive-class
+recall 0.8068 -- the minority class the reference's setup could ignore for
+free. Trained in 1m34s on CPU; early stopping fired at epoch 11 and restored
+epoch 6.
+
+### Added
+- `models/sentiment_lstm.py`: Embedding -> 2-layer LSTM -> dropout -> linear,
+  355,010 parameters, `pack_padded_sequence` so padding never enters the
+  recurrence. Returns raw logits.
+- `engine/metrics.py`: classification metrics with majority-class baselines
+  computed from the labels, plus perplexity helpers for Phase 3.
+- `engine/callbacks.py`: `EarlyStopping` and `BestWeights`.
+- `engine/trainer.py`: task-agnostic loop with gradient clipping, NaN abort,
+  and per-epoch history. Phase 3 reuses it unchanged.
+- `engine/sentiment_task.py`: config-to-checkpoint wiring.
+- `inference/checkpoint.py`: self-contained `.pt` bundles with a preprocessing
+  version guard.
+- CLI `train` and `eval`.
+- 67 tests (213 total).
+
+### Fixed
+- **D4**: every metric is reported beside its baseline, and the baseline is
+  computed from the labels rather than hardcoded. Macro-F1 replaces accuracy
+  as the model-selection signal.
+- **D5**: early stopping with best-weight restore. The saved model is the best
+  epoch, never the last.
+- **D8**: checkpoints carry weights, config, vocabulary, preprocessing contract
+  and provenance. Verified by loading one in a subprocess with no other file
+  present.
+- **D11**: no "bag of words" anywhere in the new code or docs.
+- The loss function is no longer attached to the model. `nn` losses are modules,
+  so `model.criterion = CrossEntropyLoss(weight=...)` leaked `criterion.weight`
+  into the `state_dict` and broke checkpoint loading. Caught by the D8 test.
+
 ## [0.2.0] - 2026-08-29 - Phase 1: Data layer
 
 Closes D3, D6, D7, D9.

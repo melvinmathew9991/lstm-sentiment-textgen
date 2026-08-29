@@ -258,3 +258,65 @@ Result: **21 pass · 1 warn · 0 fail · 1 skip**. The warn is the dirty working
 
 ### The rule that matters most
 **Never weaken a check to make it green.** When it fires, decide honestly whether the code/doc is wrong or the check is imprecise, and say which in the PR. Two of the three first-run findings were check bugs and one was a real doc bug — recording which is which is the whole discipline.
+
+---
+
+## Phase 2 — Sentiment model & training ✅ complete (2026-08-29)
+
+**Closes D4, D5, D8, D11.**
+
+### Result
+
+```
+                    value    baseline      lift
+  accuracy         0.8972     0.7953   +0.1019
+  macro-F1         0.8485     0.4430   +0.4055
+  ROC-AUC          0.9366     0.5000   +0.4366
+
+  per class        prec     recall        F1    support
+    negative      0.9487     0.9205    0.9344       2754
+    positive      0.7231     0.8068    0.7627        709
+```
+
+1m34s on CPU (budget 5 min). Early stopping fired at epoch 11, restored epoch 6. 355,010 parameters, exactly as `Architecture.md` specifies. **213 tests pass.**
+
+### Built
+- `models/sentiment_lstm.py` — `Embedding(4505,64,padding_idx=0)` → 2-layer `LSTM(64,64)` → `Dropout` → `Linear(64,2)`, `pack_padded_sequence`, returns logits.
+- `engine/metrics.py` — `ClassificationReport` with baselines **computed from the labels**, `majority_baseline`, `perplexity`, `uniform_perplexity_baseline` (ready for P3).
+- `engine/callbacks.py` — `EarlyStopping`, `BestWeights`.
+- `engine/trainer.py` — task-agnostic loop: clipping, NaN abort, history, tqdm.
+- `engine/sentiment_task.py` — config → checkpoint wiring.
+- `inference/checkpoint.py` — self-contained `.pt`, version guard, `build_model`, `describe`.
+- CLI `train` and `eval`.
+
+### Decisions
+1. **Baselines are computed, never hardcoded.** `majority_baseline(y_true)` derives them from the labels. A hardcoded baseline drifts the moment the split changes, and a stale baseline is worse than none — it looks like corroboration.
+2. **The trainer takes a `step_fn`,** so it knows nothing about the task. Phase 3 must reuse it unchanged; if it needs a task branch, fix the abstraction, not the loop.
+3. **`BestWeights` keeps the snapshot in memory** rather than writing per epoch. Under 1.4M params, a deep copy is far cheaper than repeated disk writes.
+4. **NaN/inf loss aborts the run** with epoch and batch index. Continuing only yields a longer run with no model.
+5. **`eval` requires the run's `config.yaml`.** A checkpoint records what the model *is*, not where its data came from; re-evaluating needs the split definition. It fails with a clear message rather than guessing.
+
+### Surprises / corrections
+- **The loss function must not be attached to the model.** I wrote `model.criterion = nn.CrossEntropyLoss(weight=...)`. `nn` losses are themselves modules, so this registered a submodule and leaked `criterion.weight` into the `state_dict`, which then failed to load into a freshly-constructed model. **Caught by `test_checkpoint_is_self_contained`** — exactly the test written to catch D8-shaped problems, catching a new one. Fixed with a `make_sentiment_step(criterion)` factory. Retraining produced *identical* metrics, confirming the change was purely structural and incidentally demonstrating seed reproducibility (S10).
+- **The untrained smoke run scored exactly the baseline** — 0.7953 accuracy, 0.4430 macro-F1, positive-class F1 of 0.0. An accidental but perfect demonstration of D4: accuracy 0.795 reads as respectable, and macro-F1 is what exposes it as worthless.
+- **The model is negative-biased.** `"i would recommend this airline"` is classified negative (p(pos)=0.127). The corpus is airline *complaints* — 79.5% negative — so positive phrasings without strong markers drift negative. Negation still moves it the right way (0.127 → 0.008). Honest limitation, not a defect.
+- Two `float(tensor)` calls on grad-tracking tensors raised UserWarnings. Fixed with `.detach().item()`.
+
+### Negation demonstration (S8)
+```
+the flight was great               positive  0.977
+the flight was not great           positive  0.751     gap 0.226
+service was good                   positive  0.782
+service was not good               negative  0.228     gap 0.554
+i would recommend this airline     negative  0.127
+i would not recommend this airline negative  0.008     gap 0.118
+```
+Under the reference's preprocessing each pair was **identical** after stopword removal. No model trained that way could separate them.
+
+### Audit
+**21 pass · 1 warn · 0 fail · 1 skip.** Warn is the dirty tree during the phase; skip is frontend purity (Phase 7).
+
+### Next: Phase 3 — Text-generation model & training
+`models/textgen_lstm.py`: `Embedding(2436,128)` → `LSTM(128,256)` → `h_n[-1]` → `Linear(256,2436)`, ≈1,333,124 params. **Reuse `engine/trainer.py` unchanged.** Gate: perplexity ≤ 400 vs the **2,436** uniform baseline, RSS < 2 GB, < 20 min CPU.
+The ≤400 target is still an unvalidated guess; report the real number rather than adjusting the target to fit it.
+Branch `phase-3-textgen`, tag `v0.4.0`.
