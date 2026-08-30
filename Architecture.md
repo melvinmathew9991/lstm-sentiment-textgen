@@ -391,6 +391,39 @@ Returns each loaded checkpoint's `task`, `model_cfg`, `vocab_size`, `metrics`, `
 ```
 Seed words absent from the vocabulary become `<unk>` rather than erroring [FR-24].
 
+### `POST /distribution`
+
+*Added in Phase 6. This route was not in the original contract; the omission was
+a gap, not a decision — see below.*
+
+```json
+// request  — only `seed` is required
+{"seed": "alice was beginning to",
+ "temperature": 0.7,     // > 0, ≤ 5.0
+ "top_k": 40,            // optional, ≥ 1
+ "n": 12}                // how many of the likeliest words to return
+
+// 200
+{"temperature": 0.7,
+ "top_k": null,
+ "words": [{"word": "her", "probability": 0.1890}, ...],
+ "entropy": 3.4333,
+ "uniform_entropy": 7.7981,
+ "vocab_size": 2436}
+```
+
+**Why it exists.** FR-34 requires the frontend to chart the next-word
+distribution at the selected temperature, and C15 forbids the frontend from
+running inference. Those two rules together mean the distribution has to arrive
+over HTTP — no route in the original section 6 could supply it, so the frontend
+could only have satisfied FR-34 by violating C15. The endpoint returns the
+*exact* tensor the sampler draws from, via `TextGenerator.distribution_at`, so
+the chart cannot drift from the sampling.
+
+`entropy` travels with `uniform_entropy` because a number nobody can scale is a
+number nobody can judge (C11). Their ratio is the whole D2 demonstration: the
+reference's sampler returned the uniform value at *every* temperature.
+
 ### Errors [FR-30]
 
 | Status | When | Body |

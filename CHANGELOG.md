@@ -8,10 +8,52 @@ Defect IDs (D1-D11) refer to `PRD.md` section 1.1.
 ## [Unreleased]
 
 ### Planned
-- Phase 6: FastAPI backend
 - Phase 7: Streamlit frontend
 - Phase 8: parity report
 - Phase 9: hardening
+
+## [0.7.0] - 2026-08-30 - Phase 6: FastAPI service
+
+The HTTP contract from `Architecture.md` section 6. Every route is a thin
+adapter over `inference.predictor`, the same code the CLI calls -- so the API's
+numbers and the CLI's numbers are the same numbers by construction. Measured
+over HTTP against the trained model, `POST /distribution` returns entropy
+1.0287 at T=0.2 and 7.4154 at T=2.0, matching the Phase 4 table to four
+decimals.
+
+### Added
+- `api/schemas.py`: request and response models. FastAPI derives the OpenAPI
+  document from these classes, so the constraints published at `/docs` are the
+  constraints enforced -- they cannot drift, because they are one object.
+- `api/app.py`: `lifespan` loads both checkpoints once (FR-29); routes
+  `GET /health`, `GET /models`, `POST /predict`, `POST /predict/batch`,
+  `POST /generate`, `POST /distribution`.
+- **`POST /distribution`**, which was *not* in the original contract. FR-34
+  requires the frontend to chart the next-word distribution and C15 forbids it
+  running inference; with no route to supply that, the two rules could not both
+  be satisfied. `Architecture.md` section 6 has been amended to document it.
+- `tests/test_api.py`: 49 tests, every route and every documented failure (S12).
+  They build **tiny untrained checkpoints** instead of reading `runs/`, so
+  unlike the trained-model suites they actually execute in CI.
+- 49 tests (**355 total**; 348 on the default fast path).
+
+### Measured (NFR-5, warm, dev machine, CPU)
+
+    POST /predict            median   2.3 ms   p95   3.2 ms    budget  100 ms
+    POST /predict/batch x32  median  28.0 ms   p95  31.1 ms    -- 0.88 ms/item
+    POST /generate 40 words  median  57.4 ms   p95  79.2 ms    budget 2000 ms
+    POST /distribution       median   4.4 ms   p95   6.7 ms
+
+Both budgets are met with roughly 25-30x headroom. The tests assert the
+*budget*, never the measurement: pinning 57 ms would fail on a slower machine
+while telling nobody anything true.
+
+### Fixed
+- Logging is configured at the API entry point, but only when nothing has
+  configured it already. Under `uvicorn` the root logger has no handlers, so
+  the checkpoint-load lines went nowhere and the operator-visible half of FR-29
+  did not exist; under pytest the harness owns root, and stamping on it would
+  silently disable `caplog` for the whole session.
 
 ## [0.6.0] - 2026-08-30 - Phase 5: CLI
 
