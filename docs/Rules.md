@@ -85,6 +85,7 @@ Non-negotiable. Each is the structural fix for an audited defect — a test asse
 - **No mutable default arguments.**
 - **Randomness** flows from an explicit `torch.Generator` or a seed argument. Never call the global RNG inside a library function.
 - **Paths** are `pathlib.Path`, resolved relative to a config value or `__file__` — never relative to the CWD. The reference only runs if you happen to be standing in `modular_code/`.
+- **Address the backend as `127.0.0.1`, never `localhost`** — in documented commands, in examples, and in defaults. Uvicorn binds IPv4; on the Windows dev machine a `localhost` lookup tries `::1` first and costs **2,066 ms per new connection**, measured 2026-08-30 against **15.1 ms** for the literal address. A reader reproducing NFR-5's *"< 100 ms for `/predict`"* with a `localhost` curl measures ~2,000 ms and concludes the budget is blown by 20×. `frontend/settings.py` already gets this right; every `curl` in these documents did not, until 2026-08-30.
 - **Prefer** small pure functions. `data/preprocess.py` must be importable and testable without torch installed.
 
 ---

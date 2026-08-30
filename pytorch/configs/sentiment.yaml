@@ -12,7 +12,8 @@ data:
   split_seed: 10          # pinned to match the frozen TF reference
   stratify: true          # PRD FR-6
   deduplicate: true       # 2.34% of rows are repeats; see PRD FR-6
-  min_freq: 2             # 9,566 train vocab -> 4,505 kept; 5.23% test OOV
+  min_freq: 2             # 8,702 train vocab -> 4,045 kept; 5.77% test OOV
+                          # (9,566 -> 4,505, 5.23% before deduplication)
   max_len: 30             # p99 = 30 tokens, max = 35
 
 model:
@@ -27,7 +28,7 @@ train:
   lr: 1.0e-3
   weight_decay: 0.0
   clip_grad_norm: 5.0
-  class_weighting: balanced   # 3.884:1 negative:positive -- PRD FR-14, fixes D4
+  class_weighting: balanced   # 4.130:1 negative:positive -- PRD FR-14, fixes D4
   num_workers: 0
   early_stopping:
     monitor: val_macro_f1     # NOT accuracy: baseline accuracy is already 0.795

@@ -86,7 +86,7 @@ cd pytorch && pip install -e . && python -m lstm_nlp.cli --help && pytest -q
 | Train / test | 7,889 / 3,382 · pos rate 0.1949 / 0.1952 |
 | — train splits again (Phase 8) | 6,705 train / 1,184 val · pos rate 0.1949 / 0.1951 |
 | Token length | median 20 · p95 27 · max 35 |
-| Train-only raw vocab | 9,566 |
+| Train-only raw vocab | **8,702** on the 6,705-row training block (9,566 before deduplication) |
 | Vocab @ `min_freq=2` | **4,045** on the 6,705-row training block the model uses (4,505 on the full un-deduplicated train split) |
 | Test OOV rate | **5.77%** at V=4,045 |
 | Class weight (pos) | 4.130 (3.884 before deduplication) |
@@ -95,7 +95,7 @@ cd pytorch && pip install -e . && python -m lstm_nlp.cli --help && pytest -q
 | Alice vocab, **train-only** @ `min_freq=1` | **2,436** (incl. `<unk>`) |
 | Windows, three blocks @ seq_len 10 | **27,399** (= 27,429 − 3×seq_len) |
 | Storage (lazy int64) | **0.22 MB** · dense `(N,10)` would be 2.19 MB |
-| Sentiment train `<unk>` rate | **3.38%** — must be > 0 so `<unk>` gets trained |
+| Sentiment train `<unk>` rate | **3.70%** — must be > 0 so `<unk>` gets trained (3.38% before deduplication) |
 
 > **Corrected 2026-08-29 during implementation.** The plan's *1,470 vocab / 27,419 windows / 707 MB*
 > were computed on the **full corpus before splitting**. The code correctly builds the vocabulary from
@@ -125,16 +125,16 @@ pytest tests/test_preprocess.py tests/test_vocab.py tests/test_datasets.py -v
 **Effort:** M · **Depends on:** P1 · **Closes:** D4, D5, D8, D11
 
 ### Tasks
-1. `models/sentiment_lstm.py` — `Embedding(V,64,padding_idx=0)` → 2-layer `LSTM(64,64)` → `Dropout(0.4)` → `Linear(64,2)`. `pack_padded_sequence` around the LSTM. **Returns logits. (C1, C10)** ≈ **355,010** params at V=4,505, **328,002** at the V=4,083 the model now trains with.
-2. `engine/metrics.py` — `classification_metrics()` returning accuracy, macro-F1, per-class P/R/F1, confusion matrix, ROC-AUC, **each beside its baseline** (acc 0.7953, macro-F1 0.4430). **(D4, C11)**
+1. `models/sentiment_lstm.py` — `Embedding(V,64,padding_idx=0)` → 2-layer `LSTM(64,64)` → `Dropout(0.4)` → `Linear(64,2)`. `pack_padded_sequence` around the LSTM. **Returns logits. (C1, C10)** **325,570** params at the V=4,045 the model trains with (355,010 at the V=4,505 of the pre-deduplication two-way split; 328,002 at the V=4,083 between the two).
+2. `engine/metrics.py` — `classification_metrics()` returning accuracy, macro-F1, per-class P/R/F1, confusion matrix, ROC-AUC, **each beside its baseline** (acc 0.8048, macro-F1 0.4459 — computed from the labels, never hardcoded). **(D4, C11)**
 3. `engine/callbacks.py` — `EarlyStopping(monitor, mode, patience)` and `BestCheckpoint` holding the best `state_dict` in memory and restoring it at the end. **(D5, C12)**
 4. `engine/trainer.py` — task-agnostic loop: epochs, `clip_grad_norm_(5.0)`, val each epoch, callbacks, `history.json`, tqdm.
 5. `inference/checkpoint.py` — `save_checkpoint`/`load_checkpoint` per the `Architecture.md` §5.1 bundle, with the preprocess-version guard. **(D8, FR-26)**
-6. Wire `train`/`eval` for the sentiment task; `CrossEntropyLoss(weight=[1.0, 3.884])`.
+6. Wire `train`/`eval` for the sentiment task; `CrossEntropyLoss(weight=[1.0, 4.130])`.
 
 ### Exit criteria
 - Trains to completion on CPU in **< 5 min** (NFR-2).
-- Test **macro-F1 ≥ 0.75** (S3); baseline 0.4430 printed beside it.
+- Test **macro-F1 ≥ 0.75** (S3); baseline 0.4459 printed beside it.
 - Early stopping fires before the 40-epoch cap (S14) — proves D5 closed.
 - `test_best_not_last_checkpoint_restored`: with a synthetic degrading val curve, the restored weights are the best epoch's. **(D5)**
 - `test_checkpoint_is_self_contained`: a **subprocess** with only `best.pt` reachable loads it and reproduces the recorded metrics to 1e-6. **(D8, S6)**
@@ -263,12 +263,12 @@ pytest tests/test_cli.py -v
 ```bash
 pytest tests/test_api.py -v
 uvicorn lstm_nlp.api.app:app --port 8000 &
-curl -s localhost:8000/health
-curl -s -X POST localhost:8000/predict  -H 'Content-Type: application/json' \
+curl -s 127.0.0.1:8000/health
+curl -s -X POST 127.0.0.1:8000/predict  -H 'Content-Type: application/json' \
      -d '{"text":"the flight was not great"}'
-curl -s -X POST localhost:8000/generate -H 'Content-Type: application/json' \
+curl -s -X POST 127.0.0.1:8000/generate -H 'Content-Type: application/json' \
      -d '{"seed":"alice was beginning to","n_words":30,"temperature":0.7}'
-curl -s -X POST localhost:8000/predict  -H 'Content-Type: application/json' \
+curl -s -X POST 127.0.0.1:8000/predict  -H 'Content-Type: application/json' \
      -d '{"text":""}'                       # expect 422
 ```
 
@@ -341,7 +341,7 @@ Candidates, in rough value order:
 3. Coverage report; close gaps on any FR without a test.
 4. `ruff` + `mypy` clean.
 5. `docker compose` for backend + frontend (CPU wheel only — keep the image small).
-6. Sweep `min_freq` ∈ {1,2,3,5} and record the F1/OOV trade-off. The 5.23% OOV is accepted, not proven optimal.
+6. Sweep `min_freq` ∈ {1,2,3,5} and record the F1/OOV trade-off. The 5.77% OOV is accepted, not proven optimal.
 7. Bidirectional LSTM for sentiment — a *strictly optional* experiment, recorded in `PARITY.md`, not a default.
 
 **Not in this phase, ever:** transformers, pretrained embeddings, GPU-only paths (`PRD.md` §3.2).
@@ -355,7 +355,7 @@ Candidates, in rough value order:
 | P0 Scaffold | ✅ **done** 2026-08-29 | — | 52 tests green · `--help` lists 4 cmds |
 | P1 Data layer | ✅ **done** 2026-08-29 | D3, D6, D7, D9 | 146 tests green · measured values asserted |
 | P2 Sentiment | ✅ **done** 2026-08-29 | D4, D5, D8, D11 | macro-F1 **0.8300** vs 0.4459 (corrected twice: selection on test in P8, duplicate rows in v1.1.0) · 213 tests |
-| P3 Text-gen | ✅ **done** 2026-08-29 | D6, D9 | ppl **223.54** vs 2,436 · RSS 421 MB |
+| P3 Text-gen | ✅ **done** 2026-08-29 | D6, D9 | ppl 223.54 vs 2,436 · RSS 421 MB — superseded by v1.2.0: held-out test **267.54**, validation 186.27 |
 | P4 Sampling | ✅ **done** 2026-08-29 | **D2**, D10 | entropy 1.03 -> 7.76 monotonic · 273 tests |
 | P5 CLI | ✅ **done** 2026-08-30 | **D1**, D10 | 4 commands from `C:\Users` · 306 tests |
 | P6 FastAPI backend | ✅ **done** 2026-08-30 | — | 6 routes + 422/503 · /predict 2.3 ms · /generate 57 ms · 355 tests |
@@ -364,5 +364,6 @@ Candidates, in rough value order:
 | P9 Hardening | ✅ **done** 2026-08-30 | — | calibration · S10 gate · lint blocking · 435 tests |
 | v1.1.0 Dedup | ✅ **done** 2026-08-30 | — | 0 leaked test rows · macro-F1 0.8300 vs 0.4459 · 440 tests |
 | v1.2.0 Text-gen held-out | ✅ **done** 2026-08-30 | — | test perplexity 267.54 vs 2,436 · baseline unmoved · 444 tests |
+| v1.2.2 Verification pass | ✅ **done** 2026-08-30 | — | every published figure re-measured · 16 superseded figures retired · stale-figure gate widened to configs, `src/`, `tests/` · 448 tests |
 
 **`Memory.md`** is created at the end of P0 (its task 10) and appended to at the end of every phase thereafter (`Rules.md` A3).

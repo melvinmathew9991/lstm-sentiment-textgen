@@ -7,8 +7,121 @@ Defect IDs (D1-D11) refer to `PRD.md` section 1.1.
 
 ## [Unreleased]
 
-Nothing planned. Every limitation `PARITY.md` section 6 opened with is now
-either fixed or recorded with the reason it stands.
+Nothing planned.
+
+## [1.2.2] - 2026-08-30 - The figures a correction did not reach
+
+An independent verification pass: retrain both models from a clean tree,
+re-measure every published number, and check the reference's defects against
+the frozen source rather than against the catalogue.
+
+**Everything reproduced.** Accuracy 0.8974, macro-F1 0.8300, ROC-AUC 0.9126 and
+all four confusion cells; test perplexity 267.54 and validation 186.27; the
+entropy curve 1.0287 / 3.4333 / 5.3862 / 7.4154 / 7.7563 against a 7.7981 floor,
+measured over HTTP in a different process, to four decimals; three seeded
+passages byte-identical. What did not reproduce was the documentation.
+
+### Fixed
+
+- **Sixteen superseded figures across eleven files.** v1.1.0 deduplicated the
+  corpus, registered the *direct* metrics it moved with the audit's stale-figure
+  gate, and never enumerated the figures **derived** from the same change. Those
+  went on being published for two releases:
+
+  - `PARITY.md` section 6 stated the calibration result as T = 1.5922, test ECE
+    0.0609 -> 0.0324 ("a 47% reduction"), 0 of 3,463, over a four-bin residual
+    table. Measured: **T = 2.6715, 0.0803 -> 0.0223 (72%), 0 of 3,382**, with the
+    worst residual +0.187 at the 0.4-0.5 bin. `Memory.md` recorded the refit
+    correctly at v1.1.0; the only document that publishes it did not.
+  - `README.md` headlined text-gen perplexity **223.54 (10.9x)** -- the v0.4.0
+    validation figure under the old 90/10 split, superseded by v1.2.0. The
+    held-out figure is **267.54 (9.11x)**.
+  - `Architecture.md` section 3.1 totalled 258,880 + 66,560 + 130 as **355,010**.
+    The sum is **325,570**, which is what the checkpoint holds.
+  - `PARITY.md` section 1 read "higher than our 0.8926" two lines under its own
+    table saying 0.8974; section 4 reported the pre-deduplication run's
+    wall-clock and epochs; section 8 counted 412 tests and 21 checks.
+  - `PARITY.md` section 6 still listed the audit's loose defect-coverage check as
+    an open limitation, fixed in Phase 9.
+  - `configs/sentiment.yaml`, `Phases.md`, `PRD.md`, three module docstrings and
+    four test docstrings carried 4,505 / 9,566 / 5.23% / 3.38% / 3.884 / 0.7953 /
+    0.4430 as current fact.
+  - `Memory.md`'s "Measured data facts" table -- the one thing a new session is
+    told to trust without recomputing -- carried the entire pre-deduplication
+    sentiment block.
+
+  Cost: nothing downstream. Every conclusion those figures supported survived
+  re-measurement, which is the point rather than the relief -- they were wrong in
+  the documents whose whole job is that their numbers can be checked.
+
+- **The audit had two sources of truth for the same numbers, and they disagreed.**
+  `check_measured_values_documented` *required* 0.7953, 0.4430, 4,505 and 3.884
+  to appear in the documents while `check_stale_figures` was never told they were
+  superseded, so the gate was actively holding the retired baselines in place.
+  `MEASURED` -- dead code, never read, and itself seven values out of date -- is
+  now the single list both checks derive from.
+
+- **The stale-figure scan reached only documents.** It now covers
+  `configs/*.yaml`, `src/**`, `tests/**` and `scripts/*.py`, each of which
+  carried a superseded figure. `Memory.md` and `CHANGELOG.md` are scanned over
+  their live regions only -- the header tables and `[Unreleased]` -- which is a
+  sharpening rather than an exemption: the whole of both was nominally in scope
+  before and the stale header table passed anyway.
+
+- **B1 did not cover the working tree, or the PDF it names.**
+  `LSTM part 2 Solution doc.pdf` was deleted in the working tree and the audit
+  reported it only as a line inside the generic dirty-tree WARN. The check now
+  reads `git status` across all three frozen paths, was verified to FAIL on that
+  deletion, and the file is restored.
+
+- **`history.json` contradicted itself.** `best_epoch` was persisted zero-based
+  beside one-based `epochs[].epoch`: a run that restored epoch 9 wrote
+  `"best_epoch": 8`. Nothing computed with it, so nothing broke, and a reader of
+  the artifact could not tell which convention it was in. Persisted one-based
+  now, with two tests asserting `best_epoch` names a record that exists.
+
+- **The D9 evidence line under-reported the comparison it exists to make.**
+  `textgen_task.py` summed storage and one-hot bytes over train + val only --
+  correct for the 90/10 split it was written for, wrong from v1.2.0 -- printing
+  `tokens 27429 (train 24687 / val 1371)`, a total that does not equal the sum of
+  its parts, and 0.21 MB / 634 MB against a true 0.22 MB / 667 MB.
+
+- **`test_parameter_count_matches_the_specification` asserted the document, not
+  the artifact.** It built the model at `vocab_size=4505` and checked 355,010, so
+  it would have passed however far the two drifted -- and they had. It builds at
+  V=4,045 now, beside a test that the total equals the sum of its parts at an
+  arbitrary vocabulary, and a `realdata` test that pins the shipped count.
+
+- **Synthetic fixtures carried real headline numbers.** The tiny checkpoints in
+  `conftest.py` and `test_checkpoint.py` reported 0.8972 / 0.8485 / 0.7953 /
+  0.4430 / 223.54 for models with random weights. Obviously synthetic now.
+
+- **Every documented `curl` used `localhost`,** which costs 2,066 ms per new
+  connection on the dev machine against 15.1 ms for `127.0.0.1`, because uvicorn
+  binds IPv4 and the `::1` attempt times out first. A reader reproducing NFR-5's
+  "< 100 ms" measured ~2,000 ms. Now a rule in `Rules.md` section 4.
+
+- `build_loaders` in `textgen_task.py` was annotated `-> tuple[DataLoader,
+  DataLoader]` while returning three; nothing caught it because `mypy` is still
+  not run.
+
+- The CI comment recorded 31 files outside `ruff format`; it is 35.
+
+### Documented, not fixed
+
+- **No headline number is verified anywhere by default.** On a clean tree
+  `pytest -m ""` gives **391 passed, 53 skipped** -- every trained-model test,
+  for want of a checkpoint. CI has been in that position since Phase 5 and says
+  so; a fresh clone now is too, while 1.2.1 above lists `runs/` under
+  "Deliberately kept". `README.md` states it with the measured counts. The fix
+  remains the deferred CI smoke train.
+
+### Verified
+
+    pytest -m ""                     448 passed in 90.76s     (was 444)
+    pytest                           432 passed, 16 deselected, 36.9s
+    ruff check .                     All checks passed!
+    python scripts/audit.py --fast   20 pass  2 warn  0 fail  1 skip
 
 ## [1.2.1] - 2026-08-30 - Repository tidy
 

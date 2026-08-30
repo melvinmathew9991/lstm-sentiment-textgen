@@ -3,7 +3,8 @@
 The Phase 8 review measured an Expected Calibration Error of **0.066** on the
 test split: inputs the model scored around 0.75 were positive about 46% of the
 time. That is not a bug in the model, it is the price of
-``class_weighting: balanced`` (3.884:1), which is the right trade for macro-F1
+``class_weighting: balanced`` (4.130:1 on the deduplicated corpus, 3.884:1 when
+that ECE was measured), which is the right trade for macro-F1
 on a 79.5%-negative corpus and the wrong one for calibration -- upweighting the
 minority class deliberately decouples the outputs from the data's prior.
 

@@ -239,7 +239,7 @@ Decided 2026-08-29:
 
 | Risk | Impact | Mitigation |
 |------|--------|------------|
-| 5.23% test OOV at `min_freq=2` | Sentiment ceiling | Measured and accepted; `<unk>` is trained, not a dead row. `min_freq` is a config knob. |
+| 5.77% test OOV at `min_freq=2` | Sentiment ceiling | Measured and accepted; `<unk>` is trained (3.70% of training tokens), not a dead row. `min_freq` is a config knob. |
 | 27,429 training tokens is a *very* small LM corpus | Text-gen output will be locally fluent, globally incoherent | Set expectations in docs; perplexity target is set against the uniform baseline, not against a real LM |
 | Determinism vs cuDNN LSTM kernels | S10 may fail on GPU | CPU is the supported target; document the GPU caveat rather than fight it |
 | Scope creep toward transformers | Loses the point of the project | Prohibited in `Rules.md` §2 |

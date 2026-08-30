@@ -21,8 +21,10 @@ from torch.nn.utils.rnn import pack_padded_sequence
 class SentimentLSTM(nn.Module):
     """Embedding -> stacked LSTM -> dropout -> linear.
 
-    At the default configuration and a 4,505-token vocabulary this is 355,010
-    parameters: 288,320 embedding, 66,560 LSTM, 130 head.
+    At the default configuration and the 4,045-token vocabulary the deduplicated
+    training block produces, this is 325,570 parameters: 258,880 embedding,
+    66,560 LSTM, 130 head.  It was documented as 355,010 until 2026-08-30 --
+    the count at the V=4,505 of the pre-deduplication two-way split.
 
     Args:
         vocab_size: Number of embedding rows, including ``<pad>`` and ``<unk>``.

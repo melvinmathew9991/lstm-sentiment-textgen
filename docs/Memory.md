@@ -24,18 +24,33 @@ Append one entry per phase. Newest at the bottom. Do not rewrite history.
 
 | | |
 |---|---|
-| Sentiment rows | 11,541 · 9,178 neg / 2,363 pos · **1 = positive** |
-| Test split | 20.47% positive → **accuracy baseline 0.7953, macro-F1 baseline 0.4430** |
-| Class weight (pos) | 3.884 |
-| Vocab @ min_freq=2 | 4,083 on the 6,866-row training block · test OOV 5.68% |
-| — under the two-way split | 4,505 · test OOV 5.23% (Phase 1; the FR-6 split is unchanged) |
+| Sentiment rows | 11,541 loaded · **11,271** after deduplication (270 dropped, 2.34%) · **1 = positive** |
+| Split | train 6,705 / val 1,184 / test **3,382** · pos rate 0.1949 / 0.1951 / 0.1952 |
+| Test split | 19.52% positive → **accuracy baseline 0.8048, macro-F1 baseline 0.4459** |
+| Class weight (pos) | **4.130** |
+| Vocab @ min_freq=2 | **4,045** on the 6,705-row training block (8,702 raw) · test OOV **5.77%** · train `<unk>` 3.70% |
+| Sentiment params | **325,570** at V=4,045 |
+| Calibration | T = **2.6715** · test ECE 0.0803 → 0.0223 · 0 of 3,382 decisions changed |
 | Alice tokens | 27,429 after Gutenberg strip (30,674 before) · train 24,687 / val 1,371 / test 1,371 |
 | Alice vocab | **2,436** train-only @ min_freq=1 → **perplexity baseline 2,436** (ln V = 7.798) |
 | Text-gen windows | 27,399 (24,677 + 1,361 + 1,361) — each block windowed separately |
-| Text-gen storage | 0.22 MB lazy int64 · reference allocated 931 MB of one-hot |
+| Text-gen params | **1,333,124** at V=2,436 |
+| Text-gen storage | 0.22 MB lazy int64 · the same windows one-hot would be 667 MB · reference allocated 931 MB |
+| Headline results | macro-F1 **0.8300** · accuracy **0.8974** · ROC-AUC **0.9126** · test perplexity **267.54** (val 186.27) |
 
-> Figures above are **post-Phase-1 measured values**. Earlier drafts of `Phases.md` quoted 1,470 vocab /
-> 27,419 windows / 707 MB — those were computed on the full corpus before splitting. See Phase 1 §Surprises.
+> **Corrected 2026-08-30.** This table is the one thing a new session is told to trust without
+> recomputing (`Rules.md` A1, A4), and it was wrong. It carried the **pre-deduplication** sentiment
+> figures — 8,078 / 3,463 rows, vocab 4,083 and 4,505, OOV 5.68% and 5.23%, class weight 3.884,
+> baselines 0.7953 / 0.4430 — for the whole of v1.1.0 and v1.2.0, because v1.1.0 registered the
+> *direct* metrics it moved with the audit's stale-figure gate and never enumerated the figures
+> **derived** from the same change. Every value above was re-measured from the real corpora on
+> 2026-08-30 and is asserted by `tests/test_datasets.py::test_sentiment_measured_values` and
+> `::test_textgen_measured_values`. Every superseded figure survives, unedited, in the phase entries
+> below — which is why the gate now scans this header region and treats the log beneath it as the
+> history it is.
+>
+> Earlier drafts of `Phases.md` quoted 1,470 vocab / 27,419 windows / 707 MB — those were computed
+> on the full corpus before splitting. See Phase 1 §Surprises.
 
 ---
 
@@ -1406,3 +1421,172 @@ already exist across these entries; the work is assembling them honestly,
 including the places the rebuild is *not* better — the negation case that moves
 0.977 → 0.751 without crossing the boundary is the obvious one.
 Branch `phase-8-parity`, tag `v0.9.0`.
+
+---
+
+## v1.2.2 — The figures a correction did not reach ✅ (2026-08-30)
+
+An independent verification pass over the finished project: retrain both models
+from a clean tree, re-measure every published number, and check the reference's
+defects against the frozen source rather than against the catalogue.
+
+### What reproduced
+
+Everything. Sentiment came back at accuracy **0.8974**, macro-F1 **0.8300**,
+ROC-AUC **0.9126** with the confusion matrix 2582 / 140 / 207 / 453 — every cell
+identical to `PARITY.md`. Text-gen came back at test perplexity **267.54**,
+cross-entropy 5.5893, top-1 0.1367, validation 186.27. The entropy curve —
+1.0287 / 3.4333 / 5.3862 / 7.4154 / 7.7563 against a 7.7981 floor — reproduced
+over HTTP, in a different process, to four decimals, and the three seeded
+generated passages came back byte-identical. `Rules.md` §7 asserts that same seed
+⇒ identical metrics; it now has an instance behind it rather than a policy.
+
+The reference's defects check out too, from its own source: `engine.py:48` passes
+four of seven required arguments; `train.py:61` builds
+`Dense(total_words, activation='softmax')` whose output `train.py:116` divides by
+the temperature before handing it to `tf.random.categorical`; `process.py:10`
+downloads stopwords at import and strips all 14 negations. One detail worth
+recording that the ledger does not have: `modular_code/output/` holds
+`sentiment_model.h5` and nothing else. `text_gen_model.h5`, written at
+`train.py:100` after 100 iterations, is **absent** — the default `input_type = 2`
+branch never ran to completion in the artifact that shipped.
+
+### What did not: sixteen superseded figures in eleven files
+
+v1.1.0 deduplicated the corpus. It correctly registered the *direct* metrics it
+moved with the audit's `STALE_FIGURES` gate — 0.8391, 0.9303 — and it never
+enumerated the figures **derived** from the same change. Those went on being
+published for two releases:
+
+| Where | Said | Measures |
+|---|---|---|
+| `PARITY.md` §6 | T = 1.5922 · test ECE 0.0609 → 0.0324 · 0 of 3,463 | **2.6715** · **0.0803 → 0.0223** · 0 of **3,382** |
+| `PARITY.md` §6 | negation 0.984 → 0.900, 0.806 → 0.145 | 0.850 → 0.633, 0.777 → 0.405 (calibrated) |
+| `PARITY.md` §6 | the defect-coverage check "is loose" | fixed in Phase 9; listed open ever since |
+| `PARITY.md` §1 | "higher than our 0.8926" | 0.8974, two lines above its own table |
+| `PARITY.md` §4 | 120.8 s, 11 epochs, stopped at 6 | 72.3 s, 14 epochs, restored 9 |
+| `PARITY.md` §8 | 412 tests · 21 checks | 448 · 23 |
+| `README.md` | perplexity **223.54** (10.9x) | **267.54** (9.11x) — the v0.4.0 selection-set figure |
+| `Architecture.md` §3.1 | TOTAL 355,010 | **325,570** — and 258,880 + 66,560 + 130 is 325,570 |
+| `Phases.md` | 9,566 raw vocab · 3.38% · baselines 0.7953 / 0.4430 · weight 3.884 | 8,702 · 3.70% · 0.8048 / 0.4459 · 4.130 |
+| `configs/sentiment.yaml` | 4,505 kept · 5.23% OOV · 3.884:1 | 4,045 · 5.77% · 4.130:1 |
+| `sentiment_lstm.py`, `sentiment.py`, `calibration.py` | 355,010 · [1.0, 3.884] · 3.884:1 | 325,570 · [1.0, 4.130] · 4.130:1 |
+| `Memory.md` header table | the whole pre-deduplication sentiment block | re-measured, in full |
+
+Cost: **nothing downstream.** Every conclusion those figures supported survived
+re-measurement — calibration still changes no decision, the model still clears
+every gate, the union of the corrections moves no argument. That is the point
+worth recording rather than the relief: the numbers were wrong in the one
+document whose entire job is that its numbers can be checked, and the project
+would have gone on quoting them.
+
+### Why the gate did not catch it — two checks pulling opposite ways
+
+`check_measured_values_documented` **required** `0.7953`, `0.4430`, `4,505` and
+`3.884` to appear somewhere in the documents. `check_stale_figures` was never
+told they had been superseded. So one check in `scripts/audit.py` was actively
+holding the retired baselines in place while the other was, in principle, meant
+to remove them — and the first one wins, silently, because it is the one that
+fails when you do the right thing.
+
+That is the interesting failure, not the sixteen literals. A gate with two
+sources of truth for the same number has a preferred answer, and it is whichever
+one was written down twice.
+
+### Fixed
+
+1. **One source of truth.** `MEASURED` was dead code — defined, never read, and
+   itself carrying seven pre-deduplication values. It is now the only list of
+   canonical numbers in the file, and `check_measured_values_documented` derives
+   its requirement from it, so the two checks can no longer disagree.
+2. **`STALE_FIGURES` gained the sixteen derived figures**, each with the value
+   that replaces it.
+3. **The scan widened** from `DOCS` to `configs/*.yaml`, `src/**`, `tests/**` and
+   `scripts/*.py`. Every one of those carried a superseded figure stated as
+   current fact; none was reachable before.
+4. **`Memory.md` and `CHANGELOG.md` are scanned over their live regions only** —
+   the header tables, and `[Unreleased]`. This is a sharpening, not an
+   exemption: previously the whole of both files was nominally in scope and the
+   stale header table passed anyway, because a neighbouring phase entry supplied
+   a history marker. Every superseded figure survives, unedited, in the phase
+   entries below.
+5. **B1 now covers the working tree and the PDF.** `LSTM part 2 Solution doc.pdf`
+   — named in `Rules.md` B1, listed in `CHANGELOG.md` 1.2.1 under "Deliberately
+   kept" — was **deleted in the working tree**, and the audit reported it only as
+   one line inside the generic dirty-tree WARN. The check now reads
+   `git status` over all three protected paths and was verified to FAIL on that
+   exact deletion before the file was restored.
+6. **`history.json` no longer contradicts itself.** `best_epoch` was persisted
+   zero-based beside `epochs[].epoch` one-based: a run that restored epoch 9
+   wrote `"best_epoch": 8`. Nothing computed with it, so nothing broke; a reader
+   of the artifact could not tell which convention it was in.
+   `TrainingHistory.best_epoch_number` is what gets persisted now, `describe()`
+   stopped adding one, and two tests assert that `best_epoch` names a record
+   that exists.
+7. **The D9 evidence line stopped under-reporting itself.** `textgen_task.py`
+   summed storage and one-hot bytes over train + val, which was right for the
+   90/10 split it was written for and wrong from v1.2.0 on. It printed
+   `tokens 27429 (train 24687 / val 1371)` — a total that does not equal the sum
+   of its own parts — and `0.21 MB` / `634 MB` against a true `0.22 MB` /
+   `667 MB`. Now: `24687 / 1371 / 1371`, and the figures match the documents.
+8. **The parameter-count test stopped asserting the document.** It constructed
+   the model at `vocab_size=4505` and checked 355,010 — so it would have passed
+   unchanged however far the sentence and the artifact drifted, and they had.
+   It now builds at V=4,045; a second test checks the total equals the sum of its
+   parts at an arbitrary vocabulary, which is the defect's actual shape; and a
+   `realdata` test pins the artifact by building from the real split.
+9. **Synthetic fixtures stopped impersonating measurements.** The tiny
+   checkpoints in `conftest.py` and `test_checkpoint.py` held `0.8972 / 0.8485 /
+   0.7953 / 0.4430 / 223.54` — the real headline numbers of the day, attached to
+   random weights. They are 0.5 / 0.25 / 100.0 now.
+10. **`localhost` retired from every documented command.** On this machine a
+    `localhost` lookup costs **2,066 ms** per new connection against **15.1 ms**
+    for `127.0.0.1`, because uvicorn binds IPv4 and the `::1` attempt times out
+    first. A reader reproducing NFR-5's *"< 100 ms"* with a pasted curl measures
+    ~2,000 ms. `frontend/settings.py` already got this right; the docs did not.
+    Now a rule in `Rules.md` §4 rather than a coincidence.
+
+### Also recorded, not fixed
+
+- **No headline number is verified anywhere by default.** On a clean tree
+  `pytest -m ""` is **391 passed, 53 skipped** — every trained-model test, for
+  want of a checkpoint. CI has been in that position since Phase 5 and says so;
+  what is new is that a fresh clone is too, while `CHANGELOG.md` 1.2.1 lists
+  `runs/` under "Deliberately kept". `README.md` now states it with the measured
+  counts. The fix is still the deferred CI smoke train, and it is worth more now
+  than when it was deferred.
+- **`build_loaders` in `textgen_task.py` was annotated `-> tuple[DataLoader,
+  DataLoader]`** while returning three. Corrected; nothing caught it because
+  `mypy` is still not run (Phase 9, "not done, deliberately").
+
+### Verified (real output)
+
+```
+$ pytest -m ""                     448 passed in 90.76s      (was 444)
+$ pytest                           432 passed, 16 deselected, 36.9s   (NFR-6 budget 60s)
+$ ruff check .                     All checks passed!
+$ python scripts/audit.py --fast   20 pass  2 warn  0 fail  1 skip
+$ lstm-nlp train --config configs/sentiment.yaml
+    restored weights from epoch 9 (val_macro_f1=0.8505)
+    calibration: T=2.6715  ECE 0.0668 -> 0.0198
+    accuracy 0.8974 / 0.8048   macro-F1 0.8300 / 0.4459   ROC-AUC 0.9126 / 0.5000
+$ lstm-nlp train --config configs/textgen.yaml
+    tokens 27429 (train 24687 / val 1371 / test 1371)  windows 24677/1361/1361
+    index storage 0.22 MB; the same windows one-hot would be 667 MB (D9)
+    test perplexity 267.54 vs 2,436
+$ history.json  sentiment best_epoch=9 -> record epoch=9
+                textgen   best_epoch=2 -> record epoch=2
+```
+
+The two warns are the working tree during this change and the known `ffc2f5b`
+subject.
+
+### The lesson, stated plainly
+
+Every one of these was a *derived* number. The project has been careful with the
+figures it measures and careless with the figures those imply, and the gate it
+built to prevent exactly this had a hole shaped like the same distinction. A
+correction is not finished when the measurement is updated; it is finished when
+the things that depend on the measurement have been enumerated. Nothing here was
+found by the audit. All of it was found by retraining the model and reading the
+output next to the document.

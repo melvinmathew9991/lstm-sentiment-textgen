@@ -174,9 +174,16 @@ DataLoader(batch=64, collate_fn=pad_to_longest_in_batch)
 │   LSTM(64→64, 2 layers, dropout=0.3)           66,560 │
 │   Dropout(0.4)                                        │
 │   Linear(64, 2)                                   130 │
-│                                    TOTAL      355,010 │
+│                                    TOTAL      325,570 │
 │   forward → RAW LOGITS (2,)   [FR-11]                 │
 └───────────────────────────────────────────────────────┘
+        │        The total is the sum of the rows above it. It read 355,010
+        │        until 2026-08-30 — the count at V=4,505, before the
+        │        validation split and before deduplication — while the
+        │        Embedding row beside it had already been corrected to
+        │        V=4,045. A total that contradicts its own line items is
+        │        the cheapest arithmetic there is to check and the easiest
+        │        to stop reading. Measured from the checkpoint: 325,570.
         │
         ▼
 CrossEntropyLoss(weight=[1.0, 4.130])   [FR-14 · fixes D4]

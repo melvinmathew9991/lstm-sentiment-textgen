@@ -39,7 +39,7 @@ Every figure in the "reference" column below is therefore what the reference
 lstm-nlp eval --ckpt pytorch/runs/sentiment/<run>/best.pt --split test
 ```
 
-### The reference's 0.909 is higher than our 0.8926. It is also not a comparison.
+### The reference's 0.909 is higher than our 0.8974. It is also not a comparison.
 
 Read naively, the reference wins on accuracy. Four reasons that reading is wrong,
 in increasing order of importance:
@@ -158,7 +158,7 @@ The reference's column is flat because its curve *was* flat. That is the whole o
 D2, measured rather than argued.
 
 ```bash
-curl -s -X POST localhost:8000/distribution -H 'Content-Type: application/json' \
+curl -s -X POST 127.0.0.1:8000/distribution -H 'Content-Type: application/json' \
      -d '{"seed":"alice was beginning to","temperature":0.2}'
 ```
 
@@ -170,8 +170,13 @@ curl -s -X POST localhost:8000/distribution -H 'Content-Type: application/json' 
 |---|---|---|
 | Text-gen input storage | **931 MB** one-hot `(30664, 10, 3036)` — `modular_code`; the notebook allocated **1,671 MB** at `(29584, 10, 5649)` | **0.22 MB** — one 1-D int64 tensor, sliced lazily |
 | Peak training RSS | not recorded | **421 MB** (293 MB of which is importing torch) |
-| Sentiment wall-clock | 50 epochs, no early stop | **120.8 s**, 11 epochs, stopped at 6 |
-| Text-gen wall-clock | ~100 epochs before the D1 crash | **57.2 s**, 7 epochs, stopped at 2 |
+| Sentiment wall-clock | 50 epochs, no early stop | **72.3 s**, 14 epochs, restored epoch 9 |
+| Text-gen wall-clock | ~100 epochs before the D1 crash | **82 s**, 7 epochs, restored epoch 2 |
+
+Wall-clock is a property of the machine as much as of the code; the epoch counts
+are not. Both rows were re-measured on 2026-08-30 after deduplication changed
+the sentiment corpus — they previously read *120.8 s, 11 epochs, stopped at 6*
+and *57.2 s*, which described the pre-v1.1.0 run.
 
 The storage difference is not an optimisation, it is the removal of a mistake:
 one-hot encoding an input that is immediately fed to an `Embedding` layer
@@ -205,26 +210,46 @@ under "lessons learned".
 Recorded because a report that lists only what went well is marketing.
 
 - **Probabilities were over-confident; now partly corrected.** Expected
-  Calibration Error was **0.0609** on test. Phase 9 fits a temperature on the
-  validation block (T = 1.5922), which brings test ECE to **0.0324** -- a 47%
-  reduction on data the fit never saw. Because temperature scaling is
-  monotonic, **no decision changed and no metric in this document moved**:
-  macro-F1 and accuracy are bit-identical either way, and 0 of 3,463 test
-  predictions flipped.
+  Calibration Error was **0.0803** on test. Phase 9 fits a temperature on the
+  validation block (T = 2.6715, validation ECE 0.0668 -> 0.0198), which brings
+  test ECE to **0.0223** -- a 72% reduction on data the fit never saw. Because
+  temperature scaling is monotonic, **no decision changed and no metric in this
+  document moved**: macro-F1 and accuracy are bit-identical either way, and
+  0 of 3,382 test predictions flipped.
 
   It is improved, not solved. A single global scalar cannot fix bin-specific
   miscalibration, and the middle of the range is still over-confident by
-  0.11-0.21:
+  0.09-0.19:
 
-        bin        n   mean p  observed     gap
-        0.4-0.5   82    0.450     0.305   +0.145
-        0.5-0.6   93    0.551     0.344   +0.207
-        0.7-0.8  103    0.750     0.553   +0.196
-        0.9-1.0  344    0.949     0.913   +0.036
+        bin           n   mean p  observed     gap
+        0.3-0.4      79    0.348     0.316   +0.032
+        0.4-0.5      83    0.452     0.265   +0.187
+        0.5-0.6      59    0.543     0.475   +0.069
+        0.6-0.7      67    0.654     0.612   +0.042
+        0.7-0.8      83    0.752     0.590   +0.162
+        0.8-0.9     143    0.856     0.762   +0.094
+        0.9-1.0     241    0.936     0.938   -0.002
 
   The API returns `calibrated: true|false` and the UI says which, because a
   score presented as a probability is the failure this project exists to
   remove.
+
+  > **Corrected 2026-08-30.** Until this revision the paragraph above read
+  > 0.0609 -> 0.0324 at T = 1.5922, "a 47% reduction", 0 of 3,463, over a
+  > four-bin table. Those are the **v1.0.0** model's figures. v1.1.0
+  > deduplicated the corpus and refitted the calibration -- `Memory.md` records
+  > the refit correctly -- but this document, the only place the result is
+  > published, was never updated, so it understated the improvement (47% where
+  > the real figure is 72%) and misstated every residual. Cost: nothing
+  > downstream, because the claim it supports (monotonic scaling changes no
+  > decision) held in both fits. The cause was not carelessness in one line:
+  > the direct metrics moved by deduplication were added to the audit's
+  > `STALE_FIGURES` gate, and every figure **derived** from them -- this
+  > temperature, these ECEs, the test row count, the vocabulary and the
+  > parameter counts that follow from it -- was not. The gate has no way to
+  > know about a number it was never given, so it passed. Fixed here and in the
+  > gate at the same time; the derived figures are now enumerated in
+  > `scripts/audit.py`.
 - ~~2.48% of test rows duplicate a training row~~ **Fixed in v1.1.0.** Rows are
   deduplicated on cleaned text before splitting, and the five texts carrying
   contradictory labels are dropped rather than resolved — 270 rows, 2.34%.
@@ -236,18 +261,41 @@ Recorded because a report that lists only what went well is marketing.
   block is carved out of the already-held-out slice at 90/5/5, not out of train,
   so the training block is byte-identical to before and the vocabulary, `ln V`
   and every entropy figure in §3 are unchanged. It cost what the selection
-  effect was worth: perplexity 223.54 on the selection set becomes **267.54**
+  effect was worth: the previously-published 223.54, measured on the
+  selection set, becomes **267.54**
   held out, against the same 2,436 floor. My earlier note here assumed the block
   had to come out of train, which is what made it look expensive.
-- **Negation does not always cross the decision boundary.** `"the flight was not
-  great"` moves 0.984 → 0.900 without flipping, because the corpus is 79.5%
-  complaints and *"great"* is a very strong positive marker. Other pairs cross
-  outright (`"service was not good"` 0.806 → 0.145). D3 is about the *input*
-  surviving preprocessing, and it does; the model's sensitivity is a separate,
-  weaker claim and is stated as one.
-- **The audit's defect-coverage check is loose** — it substring-matches over the
-  concatenated test sources, so D10 is "covered" by the word `config`. The real
-  D10 test exists; the check would not notice its deletion.
+- **Negation does not always cross the decision boundary.** Measured on the five
+  documented pairs, using the **calibrated** probabilities the CLI, the API and
+  the UI actually return:
+
+        pair                              plain  negated     gap  crosses
+        the flight was great              0.850    0.633   0.216  no
+        service was good                  0.777    0.405   0.371  yes
+        i am happy                        0.581    0.320   0.262  yes
+        i would recommend this airline    0.601    0.261   0.340  yes
+        the crew was helpful              0.878    0.693   0.185  no
+
+  Direction is correct on 5 of 5 and the median gap is 0.262, but two pairs move
+  without flipping, because the corpus is 79.5% complaints and *"great"* is a
+  very strong positive marker. D3 is about the *input* surviving preprocessing,
+  and it does; the model's sensitivity is a separate, weaker claim and is stated
+  as one. The aggregate is what `test_negation_changes_the_prediction` asserts —
+  a per-pair threshold measures the run, the median measures the model.
+
+  > **Corrected 2026-08-30.** This bullet previously read `0.984 → 0.900` and
+  > `0.806 → 0.145`. Those are pre-deduplication **and** pre-calibration
+  > figures: they describe a model that no longer exists, scored on a raw
+  > softmax the product no longer returns. The conclusion survived the
+  > correction unchanged, which is why nothing downstream moved.
+- ~~The audit's defect-coverage check is loose.~~ **Fixed in v1.0.0 (Phase 9).**
+  It matched the concatenated source of every test file, so D4, D8 and D10 were
+  "covered" by words in docstrings and D10's intended needle `magic` matched
+  nothing at all. It now matches **test function names**, every needle was
+  verified against a real one, and the check was confirmed to FAIL when the D10
+  test is removed. Listed as open here until 2026-08-30 — the fix landed and
+  this document was not updated, which is the same propagation failure as the
+  calibration bullet above.
 
 ---
 
@@ -286,8 +334,8 @@ lstm-nlp train --config configs/textgen.yaml        # ~1 min CPU
 lstm-nlp eval --ckpt runs/sentiment/<run>/best.pt --split test
 lstm-nlp eval --ckpt runs/textgen/<run>/best.pt
 
-pytest -m ""                                        # 412 tests
-python scripts/audit.py                             # 21 checks
+pytest -m ""                                        # 444 tests
+python scripts/audit.py                             # 23 checks
 ```
 
 Training is seeded (`seed: 42`), so the figures above reproduce on a CPU machine.
