@@ -124,8 +124,12 @@ def tiny_runs(tmp_path_factory: pytest.TempPathFactory, tiny_vocab) -> Path:
         model_cfg=sentiment.config(),
         vocab=tiny_vocab,
         preprocess={"max_len": TINY_MAX_LEN, "min_freq": 1},
-        metrics={"accuracy": 0.8972, "baseline_accuracy": 0.7953,
-                 "macro_f1": 0.8485, "baseline_macro_f1": 0.4430},
+        # Deliberately synthetic. These held the real headline numbers of
+        # the day until 2026-08-30, which meant a reader could lift a
+        # measured-looking figure out of a fixture for a random-weight
+        # model, and the stale-figure gate had one more place to chase.
+        metrics={"accuracy": 0.5000, "baseline_accuracy": 0.2500,
+                 "macro_f1": 0.5000, "baseline_macro_f1": 0.2500},
         train_info={"seed": 42, "best_epoch": 3},
     )
 
@@ -137,7 +141,8 @@ def tiny_runs(tmp_path_factory: pytest.TempPathFactory, tiny_vocab) -> Path:
         model_cfg=textgen.config(),
         vocab=tiny_vocab,
         preprocess={"seq_len": TINY_SEQ_LEN, "min_freq": 1},
-        metrics={"perplexity": 223.54, "baseline_perplexity": 2436.0},
+        # Synthetic, for the same reason as the sentiment block above.
+        metrics={"perplexity": 100.00, "baseline_perplexity": 1000.0},
         train_info={"seed": 42, "best_epoch": 3},
     )
     return root

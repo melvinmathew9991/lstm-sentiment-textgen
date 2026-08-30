@@ -44,8 +44,11 @@ def saved(tmp_path: Path, vocab: Vocab) -> Path:
         model_cfg=model.config(),
         vocab=vocab,
         preprocess={"max_len": 30, "min_freq": 1},
-        metrics={"accuracy": 0.8972, "macro_f1": 0.8485,
-                 "baseline_accuracy": 0.7953, "baseline_macro_f1": 0.4430},
+        # Synthetic: this checkpoint holds random weights, so any
+        # resemblance to a measured figure is misleading. It carried the
+        # real headline numbers until 2026-08-30.
+        metrics={"accuracy": 0.5000, "macro_f1": 0.5000,
+                 "baseline_accuracy": 0.2500, "baseline_macro_f1": 0.2500},
         train_info={"seed": 42, "best_epoch": 5, "stopped_early": True},
     )
 
@@ -81,7 +84,7 @@ def test_checkpoint_records_provenance(saved: Path) -> None:
 def test_metrics_travel_with_their_baselines(saved: Path) -> None:
     """C11 survives serialisation: a stored metric keeps its baseline."""
     metrics = load_checkpoint(saved)["metrics"]
-    assert metrics["baseline_macro_f1"] == pytest.approx(0.4430)
+    assert metrics["baseline_macro_f1"] == pytest.approx(0.2500)
     assert metrics["macro_f1"] > metrics["baseline_macro_f1"]
 
 
