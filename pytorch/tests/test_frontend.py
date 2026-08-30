@@ -519,7 +519,9 @@ def test_sentiment_page_always_shows_the_baseline(live_backend: str) -> None:
     page = _run(SENTIMENT_PAGE, live_backend)
     page.button(key="classify").click().run()
     rendered = " ".join(block.value for block in page.markdown)
-    assert "0.7953" in rendered, "no accuracy claim may appear without its baseline"
+    # The deduplicated corpus is 80.48% negative, so that is the floor any
+    # accuracy claim on this page has to be read against (Rules.md C16).
+    assert "0.8048" in rendered, "no accuracy claim may appear without its baseline"
 
 
 @pytest.mark.slow

@@ -98,7 +98,7 @@ def majority_baseline(y_true: np.ndarray, n_classes: int = 2) -> tuple[float, fl
     """Accuracy and macro-F1 of always predicting the most common class.
 
     This is the number any real model has to beat. On this dataset it is
-    0.7953 accuracy and 0.4430 macro-F1 -- the second is far lower because the
+    0.8048 accuracy and 0.4459 macro-F1 -- the second is far lower because the
     minority class scores an F1 of exactly zero, which is precisely what
     accuracy alone conceals (D4).
 

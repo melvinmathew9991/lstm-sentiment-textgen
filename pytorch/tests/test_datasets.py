@@ -63,16 +63,19 @@ def test_splits_are_disjoint_and_complete(sample_csv: Path) -> None:
     the rows the model is then reported on.
     """
     splits = prepare_sentiment_data(sample_csv, min_freq=1)
-    assert len(splits.train) + len(splits.val) + len(splits.test) == 200
 
-    train_idx = set(range(len(splits.train)))
-    assert train_idx  # non-empty, so the disjointness below means something
+    # Against the deduplicated row count, not a literal: deduplication decides
+    # how many rows there are, and hardcoding 200 would assert the fixture's
+    # size rather than the property.
+    kept = len(load_sentiment_frame(sample_csv, deduplicate=True))
+    assert len(splits.train) + len(splits.val) + len(splits.test) == kept
+
+    # Disjoint, and now genuinely so: deduplication runs before the split, so a
+    # shared cleaned text between blocks is impossible rather than merely rare.
     for a, b in (("train", "val"), ("train", "test"), ("val", "test")):
-        first = list(getattr(splits, a).texts)
-        second = list(getattr(splits, b).texts)
-        # Row identity is positional here; duplicate tweet text occurs in the
-        # corpus itself and is not evidence of a split leak.
-        assert len(first) + len(second) <= 200, f"{a}/{b} overlap"
+        assert not set(getattr(splits, a).texts) & set(getattr(splits, b).texts), (
+            f"{a}/{b} share a cleaned text"
+        )
 
 
 def test_validation_is_carved_out_of_train_never_out_of_test(sample_csv: Path) -> None:
@@ -266,19 +269,19 @@ def test_sentiment_measured_values(sentiment_splits) -> None:
     what keeps every number comparable across the change.
     """
     s = sentiment_splits
-    assert (len(s.train), len(s.val), len(s.test)) == (6866, 1212, 3463)
-    assert len(s.train) + len(s.val) + len(s.test) == 11541
-    assert s.train.label_counts == {"negative": 5460, "positive": 1406}
-    assert s.train.label_counts["positive"] / len(s.train) == pytest.approx(0.2048, abs=1e-4)
-    assert s.val.label_counts["positive"] / len(s.val) == pytest.approx(0.2046, abs=1e-4)
-    assert s.test.label_counts["positive"] / len(s.test) == pytest.approx(0.2047, abs=1e-4)
-    assert len(s.vocab) == 4083
-    assert s.class_weights.tolist() == pytest.approx([1.0, 3.883], abs=1e-3)
-    assert s.test.unknown_rate() == pytest.approx(0.0568, abs=1e-4)
+    assert (len(s.train), len(s.val), len(s.test)) == (6705, 1184, 3382)
+    assert len(s.train) + len(s.val) + len(s.test) == 11271
+    assert s.train.label_counts == {"negative": 5398, "positive": 1307}
+    assert s.train.label_counts["positive"] / len(s.train) == pytest.approx(0.1949, abs=1e-4)
+    assert s.val.label_counts["positive"] / len(s.val) == pytest.approx(0.1951, abs=1e-4)
+    assert s.test.label_counts["positive"] / len(s.test) == pytest.approx(0.1952, abs=1e-4)
+    assert len(s.vocab) == 4045
+    assert s.class_weights.tolist() == pytest.approx([1.0, 4.130], abs=1e-3)
+    assert s.test.unknown_rate() == pytest.approx(0.0577, abs=1e-4)
     # The training rate must be NONZERO: min_freq=2 drops training hapax, and
     # that is exactly what gives the <unk> embedding row gradient signal. At 0,
     # <unk> would be a randomly-initialised row first used at inference time.
-    assert s.train.unknown_rate() == pytest.approx(0.0371, abs=1e-4)
+    assert s.train.unknown_rate() == pytest.approx(0.0370, abs=1e-4)
     assert 0.0 < s.train.unknown_rate() < s.test.unknown_rate()
 
 
@@ -310,3 +313,66 @@ def test_no_gutenberg_vocabulary_in_textgen(textgen_splits) -> None:
     """D6 at the vocabulary level -- the licence words have no index at all."""
     for word in ("copyright", "donations", "foundation", "ebook", "license", "gutenberg"):
         assert word not in textgen_splits.vocab
+
+
+# --------------------------------------------------------------------------- #
+# deduplication -- no row may appear in two blocks
+# --------------------------------------------------------------------------- #
+
+
+def test_no_cleaned_text_appears_in_two_blocks(sample_csv: Path) -> None:
+    """The property deduplication exists to guarantee.
+
+    Before this, 86 of 3,463 test rows (2.48%) shared their cleaned text with a
+    training row -- mostly stubs like "<user> thanks" -- so the model was partly
+    scored on inputs it had memorised.
+    """
+    s = prepare_sentiment_data(sample_csv, min_freq=1)
+    train, val, test = set(s.train.texts), set(s.val.texts), set(s.test.texts)
+    assert not train & test
+    assert not train & val
+    assert not val & test
+
+
+def test_without_deduplication_the_leak_returns(sample_csv: Path) -> None:
+    """Negative control: the guarantee comes from the flag, not from luck.
+
+    If the corpus happened to hold no duplicates, the test above would pass
+    whatever the code did.
+    """
+    raw = load_sentiment_frame(sample_csv, deduplicate=False)
+    deduped = load_sentiment_frame(sample_csv, deduplicate=True)
+    assert len(deduped) < len(raw), "the fixture must contain duplicates to control against"
+
+
+def test_deduplication_keeps_one_row_per_cleaned_text(sample_csv: Path) -> None:
+    frame = load_sentiment_frame(sample_csv, deduplicate=True)
+    assert frame["clean"].is_unique
+
+
+def test_contradictory_labels_are_dropped_not_resolved() -> None:
+    """A text labelled both ways is an annotation nobody can adjudicate.
+
+    Keeping either label would be inventing one; keeping both would put the
+    same input in two classes.
+    """
+    import pandas as pd
+
+    from lstm_nlp.data.sentiment import _drop_duplicate_texts
+
+    frame = pd.DataFrame({
+        "clean": ["same text", "same text", "unique one", "twice", "twice"],
+        "airline_sentiment": [0, 1, 1, 0, 0],
+        "text": ["a", "b", "c", "d", "e"],
+    })
+    kept = _drop_duplicate_texts(frame)
+    assert "same text" not in set(kept["clean"]), "contradictory text must be dropped"
+    assert sorted(kept["clean"]) == ["twice", "unique one"]
+    assert len(kept) == 2
+
+
+def test_deduplication_is_order_stable(sample_csv: Path) -> None:
+    """First occurrence wins, so the result depends on the file, not on chance."""
+    a = load_sentiment_frame(sample_csv, deduplicate=True)
+    b = load_sentiment_frame(sample_csv, deduplicate=True)
+    assert list(a["clean"]) == list(b["clean"])

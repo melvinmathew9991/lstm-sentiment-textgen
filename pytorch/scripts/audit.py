@@ -75,6 +75,8 @@ STALE_FIGURES = {
     "0.8485": "sentiment macro-F1 selected on the test split; held-out value is 0.8391",
     "0.8972": "sentiment accuracy selected on the test split; held-out value is 0.8926",
     "0.9366": "sentiment ROC-AUC selected on the test split; held-out value is 0.9303",
+    "0.8391": "sentiment macro-F1 inflated by duplicate rows; corrected value is 0.8300",
+    "0.9303": "sentiment ROC-AUC inflated by duplicate rows; corrected value is 0.9126",
 }
 
 BANNED_IMPORTS = {

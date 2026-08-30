@@ -976,10 +976,10 @@ split, validation carved out of train, test scored once.
 ```
 
 Retraining under the fixed protocol reproduced the audit experiment to four
-decimals — 0.8391 / 0.8926 / 0.9303 — which is its own small reassurance about
-determinism.
+decimals — 0.8391 / 0.8926 / 0.9303, later superseded again by deduplication in
+v1.1.0 — which is its own small reassurance about determinism.
 
-**The gate is untouched.** 0.8391 still clears the ≥ 0.75 target against 0.4430,
+**The gate is untouched.** 0.8391 (superseded) still clears the ≥ 0.75 target,
 and the rebuild's advantage over the reference is not in question. What changed
 is that the number now means what it says. Two honest caveats: the fixed model
 trains on 15% fewer rows, so part of the drop is lost data rather than lost
@@ -1252,6 +1252,78 @@ smuggle in under "hardening".
 
 ### Audit
 435 tests. 21 pass · 0 fail · 0 skip.
+
+---
+
+## v1.1.0 — Deduplicate before splitting ✅ (2026-08-30)
+
+The second of the two limitations `PARITY.md` §6 published, and the last one
+worth the ripple it causes.
+
+### What the leak was worth
+
+86 of 3,463 test rows (2.48%) shared their cleaned text with a training row —
+mostly stubs, `"<user> thanks"` eighteen times, `"<user> thank you"` fifteen.
+The model was partly being scored on inputs it had memorised.
+
+```
+macro-F1   0.8391 -> 0.8300     previously inflated by the duplicates
+ROC-AUC    0.9303 -> 0.9126
+accuracy   0.8926 -> 0.8974     against a baseline that also rose
+```
+
+**Accuracy going up while macro-F1 goes down is the signature of a removed
+leak** on imbalanced data: the easy repeated rows are gone, so the remaining
+test set is harder per-row but the majority class is a larger share of it.
+
+### The consequence I did not anticipate
+
+Duplicates skew **positive** — they are disproportionately "thanks" tweets — so
+removing them moved the corpus itself: positive rate 0.2047 → 0.1952, and with
+it **the majority-class baseline, 0.7953 → 0.8048**, and the class-weight ratio
+3.884 → 4.130.
+
+That is a bigger ripple than the metrics. 0.7953 and 0.4430 are quoted in
+`Rules.md` A4 as canonical measured values, in C11 as the rule's own example,
+and beside every accuracy claim in the project. I had scoped this change as "a
+leakage fix"; it was also a change to the reference point everything is judged
+against. Worth recording as a scoping miss rather than a surprise about the
+data.
+
+### Decisions
+1. **Deduplicate on cleaned text, not raw text.** Cleaning is what makes two
+   differently-typed tweets the same input. Two rows the model cannot tell
+   apart are one row as far as evaluation is concerned.
+2. **Before the split, not after.** A duplicate that never reaches the splitter
+   cannot straddle the boundary. Removing them afterwards would leave the
+   choice of which block keeps the survivor.
+3. **Contradictory texts are dropped, not resolved.** Five cleaned texts carry
+   both labels. Keeping either would be inventing an annotation; keeping both
+   would put one input in two classes.
+4. **FR-6 amended rather than quietly violated.** The seed was pinned "for
+   comparability" with the reference. Deduplication breaks row-level
+   comparability on purpose — and `PARITY.md` §0 already establishes the
+   reference's numbers can never be re-measured, so the comparability the pin
+   protected does not exist to preserve. Saying that in the requirement is the
+   difference between an amendment and a violation.
+
+### Verified
+```
+train/test shared texts: 0     train/val: 0     val/test: 0
+test rows whose text also appears in train: 0   (was 86)
+```
+Two independent seeded runs produced identical metrics on the new corpus, which
+is S10 holding on the real data rather than on the fixture.
+
+Calibration refitted: T = 2.6715, test ECE **0.0803 → 0.0223**, still 0 of 3,382
+decisions changed. The uncalibrated model is *more* over-confident than before,
+and the fitted scalar does correspondingly more work.
+
+### Still open, by choice
+A held-out block for text generation. Same defect class, but it rebuilds the
+text-gen vocabulary and moves the 2,436 / 7.7981-nat uniform baseline that the
+entire D2 demonstration — the centrepiece of this project — is quoted against.
+That trade deserves its own decision, not a footnote in a cleanup.
 
 ### The project is done
 Ten phases, eleven reference defects closed, two of our own found and fixed by

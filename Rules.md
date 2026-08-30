@@ -65,7 +65,7 @@ Non-negotiable. Each is the structural fix for an audited defect — a test asse
 | **C8** | **Sequences are int64 indices.** No one-hot tensor is ever materialised for a whole dataset. *(D9)* |
 | **C9** | **Checkpoints are self-contained** — weights + config + vocab + preprocess version, loadable with no other file present. *(D8)* |
 | **C10** | **`padding_idx=0` on every `nn.Embedding`,** and `pack_padded_sequence` wherever padded batches enter an LSTM. Padding must not influence a gradient. |
-| **C11** | **No metric without its baseline.** Accuracy prints beside 0.7953; macro-F1 beside 0.4430; perplexity beside 1470. *(D4)* |
+| **C11** | **No metric without its baseline.** Accuracy prints beside 0.8048; macro-F1 beside 0.4459; perplexity beside its uniform floor. *(D4)* |
 | **C12** | **Early stopping restores the best epoch.** The last epoch's weights are never what gets saved. *(D5)* |
 | **C13** | **No magic numbers.** Every hyperparameter, path and threshold comes from config. `input_words[-28701]` is the anti-pattern. *(D10)* |
 | **C14** | **Call things what they are.** The encoding is an *integer-index sequence into a learned embedding*, not "bag of words". *(D11)* |
@@ -142,7 +142,7 @@ Custom exceptions live in `lstm_nlp/errors.py`, all subclassing `LstmNlpError`.
 | **A1** | **Read `Memory.md` first**, then the phase you are on in `Phases.md`. Do not re-read the whole codebase to rebuild context that is already written down. |
 | **A2** | **Work one phase at a time.** Do not start Phase N+1 before Phase N's exit criteria pass. |
 | **A3** | **Update `Memory.md` at the end of each phase** — what was built, decisions made, surprises found, what is next. That is its entire purpose. |
-| **A4** | **Do not invent numbers.** The measured values in these docs (4,505 vocab · 5.23% OOV · 27,429 tokens · 0.4430 baseline · 931 MB reference one-hot) were computed from the real data. If you need a new one, compute it and record how. |
+| **A4** | **Do not invent numbers.** The measured values in these docs (4,045 vocab · 5.77% OOV · 27,429 tokens · 0.4459 macro-F1 baseline · 931 MB reference one-hot) were computed from the real data. If you need a new one, compute it and record how. |
 | **A5** | **Do not claim a test passes without running it.** Paste real output. |
 | **A6** | **Do not expand scope.** No extra models, no plots, no notebooks, no README rewrites unless asked. If you spot something worth doing, note it in `Memory.md` under "Deferred" and move on. |
 | **A7** | **Do not "improve" the frozen reference** even where it is obviously wrong. That is the point of B1. |

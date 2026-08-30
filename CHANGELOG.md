@@ -7,7 +7,47 @@ Defect IDs (D1-D11) refer to `PRD.md` section 1.1.
 
 ## [Unreleased]
 
-Nothing planned. The phase plan is complete.
+Nothing planned. One item from `PARITY.md` section 6 remains open by choice: a
+held-out block for text generation, which would move the 2,436 / 7.7981-nat
+uniform baseline the D2 demonstration is quoted against.
+
+## [1.1.0] - 2026-08-30 - Deduplicate before splitting
+
+Closes the second of the two limitations `PARITY.md` section 6 published.
+
+### Fixed
+- **2.48% of test rows shared their cleaned text with a training row.** 86 of
+  3,463, mostly stubs like `"<user> thanks"` (x18) -- so the model was partly
+  scored on inputs it had memorised. Rows are now deduplicated on **cleaned**
+  text before the split, because cleaning is what makes two differently-typed
+  tweets the same input, and a duplicate that never reaches the splitter cannot
+  straddle the boundary. Afterwards **0** test rows share a training row.
+- Five cleaned texts carried **contradictory labels**. They are dropped rather
+  than resolved: keeping either label would be inventing an annotation, and
+  keeping both would put one input in two classes.
+
+### It cost what it should have
+
+    macro-F1   previously 0.8391 -> 0.8300   the duplicates inflated this
+    ROC-AUC    previously 0.9303 -> 0.9126
+    accuracy   previously 0.8926 -> 0.8974   against a baseline that also rose
+
+270 rows removed (2.34%). The duplicates skewed positive, so **the
+majority-class baseline moved too**, 0.7953 -> 0.8048, and the class-weight
+ratio 3.884 -> 4.130. Accuracy rising while macro-F1 falls is exactly what a
+removed leak looks like on imbalanced data: the easy, repeated rows are gone.
+
+### Changed
+- `FR-6` amended. The split seed was pinned "for comparability" with the
+  reference; deduplication breaks row-level comparability deliberately, and
+  `PARITY.md` section 0 already establishes that the reference's numbers can
+  never be re-measured -- so the comparability the pin protected does not exist.
+- Corpus figures follow: 11,271 rows (6,705 / 1,184 / 3,382), vocabulary
+  **4,045**, test OOV **5.77%**, 325,570 parameters.
+- Calibration refitted: **T = 2.6715**, test ECE **0.0803 -> 0.0223**, still
+  with 0 of 3,382 decisions changed.
+- 5 tests (**440 total**), including the control that deduplication is what
+  removes the overlap rather than the fixture happening to have none.
 
 ## [1.0.0] - 2026-08-30 - Phase 9: Hardening
 
@@ -112,8 +152,8 @@ way it was described.
         0.8391      0.8926     0.9303    held out, scored once
         +0.0094     +0.0046    +0.0063   optimism
 
-  The gate is unaffected: 0.8391 still clears the >= 0.75 target against a
-  0.4430 baseline. What changes is that the number now means what it says.
+  The gate is unaffected: 0.8391 -- later superseded by 1.1.0 -- still clears
+  the >= 0.75 target against its baseline. What changes is that the number now means what it says.
   Reported honestly, the model also trains on 15% fewer rows, so part of the
   drop is lost data rather than lost optimism -- the true optimism is a little
   smaller than +0.0094.

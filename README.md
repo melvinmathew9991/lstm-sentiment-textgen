@@ -6,7 +6,7 @@ A full-stack PyTorch rebuild of a TensorFlow/Keras teaching project, undertaken 
 
 | | |
 |---|---|
-| **Task A** | Binary sentiment classification over 11,541 airline tweets |
+| **Task A** | Binary sentiment classification over 11,541 airline tweets (11,271 after deduplication) |
 | **Task B** | Word-level next-token generation over *Alice's Adventures in Wonderland* |
 | **Shape** | Many-to-one LSTM in both cases: a sequence in, one prediction out |
 
@@ -127,8 +127,8 @@ Populated as phases complete. Every figure is measured, and every metric is repo
 
 | Metric | Baseline | Result |
 |---|---|---|
-| Sentiment accuracy | 0.7953 (majority class) | **0.8926**  (+0.0973) |
-| Sentiment macro-F1 | 0.4430 (majority class) | **0.8391**  (+0.3961) |
+| Sentiment accuracy | 0.8048 (majority class) | **0.8974**  (+0.0925) |
+| Sentiment macro-F1 | 0.4459 (majority class) | **0.8300**  (+0.3841) |
 | Text-gen perplexity | 2,436 (uniform over vocab) | **223.54**  (10.9x better) |
 
 Note on the original's headline number: its 0.909 validation accuracy is **not** a target. It was produced by a model trained on negation-stripped text (D3), reported without a baseline it barely clears (D4), and saved at its worst epoch (D5). Reproducing it would not be evidence of anything. See [`PRD.md` §6.3](PRD.md).

@@ -136,6 +136,7 @@ def train_sentiment(cfg: SentimentConfig, max_steps: int | None = None) -> Path:
         test_size=cfg.data.test_size,
         split_seed=cfg.data.split_seed,
         stratify=cfg.data.stratify,
+        deduplicate=cfg.data.deduplicate,
         val_size=cfg.data.val_size,
         min_freq=cfg.data.min_freq,
         max_len=cfg.data.max_len,

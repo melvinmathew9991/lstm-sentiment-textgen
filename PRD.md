@@ -82,7 +82,7 @@ Word-level LM over *Alice's Adventures in Wonderland*. Many-to-one: fixed 10-wor
 | FR-3 | Sentiment preprocessing must **preserve negations**. Stopword removal is prohibited for this task. URLs → `<url>`, `@handles` → `<user>`, `&amp;` → `and`, lowercase, strip remaining punctuation except apostrophes. Fixes **D3**. |
 | FR-4 | Build vocabulary from the **training split only**, with `min_freq` configurable per task and reserved specials at the leading indices — `<pad>`=0/`<unk>`=1 for the padded sentiment task, `<unk>`=0 for fixed-window text-gen, which needs no padding. Defaults: sentiment `min_freq=2`, text-gen `min_freq=1` (see `Memory.md` Phase 1 for the measurement behind the difference). Fixes **D7**. |
 | FR-5 | Every token lookup must map unseen words to `<unk>`. No code path may raise `KeyError` on unknown input. Fixes **D7**. |
-| FR-6 | Sentiment train/test split must be **stratified** on the label, `test_size=0.30`, `random_state=10` (kept from the original for comparability). |
+| FR-6 | Sentiment train/test split must be **stratified** on the label, `test_size=0.30`, `random_state=10`. *Amended 2026-08-30:* rows are **deduplicated on cleaned text before splitting**, and texts carrying contradictory labels are dropped — 270 rows (2.34%), after which 0 test rows share a training row (previously 86, or 2.48%). This deliberately breaks row-level comparability with the reference's split; `PARITY.md` §0 already establishes that the reference's numbers can never be re-measured, so the comparability the seed was pinned for does not exist to preserve. |
 | FR-7 | Text-gen train/val split must be an explicit split over **contiguous blocks of real prose**, with windowing done per block so none straddles the boundary — never Keras `validation_split` semantics. *Amended 2026-08-29:* the held-out block **is** the trailing slice, which is standard LM practice (Penn Treebank, WikiText) and is safe here **only because FR-2 already removed the licence text** that previously occupied it. Disabling the strip re-creates D6, and a test asserts that. Fixes **D6**. |
 | FR-8 | Sequences are stored as **integer indices**, never one-hot. Fixes **D9**. |
 
@@ -100,7 +100,7 @@ Word-level LM over *Alice's Adventures in Wonderland*. Many-to-one: fixed 10-wor
 | ID | Requirement |
 |----|-------------|
 | FR-13 | Early stopping on validation macro-F1 (sentiment) / validation loss (text-gen), with configurable patience, and the **best** checkpoint restored and saved — not the last. Fixes **D5**. |
-| FR-14 | Class imbalance handled explicitly via `CrossEntropyLoss(weight=…)`. Measured ratio is 3.884:1. Fixes **D4**. |
+| FR-14 | Class imbalance handled explicitly via `CrossEntropyLoss(weight=…)`. Measured ratio is **4.130:1** on the deduplicated corpus (3.884:1 before). Fixes **D4**. |
 | FR-15 | Gradient clipping (`clip_grad_norm_`, default 5.0) on both tasks. |
 | FR-16 | Every run writes a JSON history of per-epoch train/val loss and metrics to `runs/<task>/<timestamp>/history.json`. |
 | FR-17 | Seeds for `random`, `numpy`, and `torch` set from config; `torch.use_deterministic_algorithms(True)` where it does not break LSTM kernels. Two runs with the same seed must produce the same metrics. |
