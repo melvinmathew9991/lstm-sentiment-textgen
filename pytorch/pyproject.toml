@@ -31,7 +31,13 @@ where = ["src"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = "-q --strict-markers"
+# NFR-6: the default path stays under 60s. Tests that actually train are
+# marked `slow` and excluded here; CI runs them explicitly with `-m ""`.
+addopts = "-q --strict-markers -m 'not slow'"
+markers = [
+    "realdata: needs the full corpora in data/",
+    "slow: runs a real training step; excluded from the default fast path",
+]
 filterwarnings = ["error::DeprecationWarning:lstm_nlp.*"]
 
 [tool.ruff]

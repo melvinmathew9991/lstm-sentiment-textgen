@@ -274,13 +274,26 @@ def main(argv: list[str] | None = None) -> int:
     try:
         return args.func(args)
     except LstmNlpError as exc:
+        # Expected, typed failure: report the message, not a traceback.
         logger.error("%s: %s", type(exc).__name__, exc)
+        return EXIT_ERROR
+    except FileNotFoundError as exc:
+        logger.error("file not found: %s", exc)
+        return EXIT_ERROR
+    except OSError as exc:
+        logger.error("could not read or write a file: %s", exc)
         return EXIT_ERROR
     except NotImplementedError as exc:
         logger.error("not implemented yet -- %s", exc)
         return EXIT_ERROR
     except KeyboardInterrupt:
         logger.warning("interrupted")
+        return EXIT_ERROR
+    except Exception:
+        # An unexpected failure is a bug. Log it with the traceback for
+        # diagnosis, but still exit through the documented code rather than
+        # dumping a raw trace at the user (Rules.md section 5).
+        logger.exception("unexpected error; this is a bug, please report it")
         return EXIT_ERROR
 
 

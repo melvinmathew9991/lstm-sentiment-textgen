@@ -40,7 +40,9 @@ jobs:
 
       - name: Test
         working-directory: pytorch
-        run: pytest -v
+        # -m "" overrides the default marker filter so the `slow` tests, which
+        # actually train, run in CI rather than being silently skipped.
+        run: pytest -v -m ""
 
       - name: CLI smoke
         working-directory: pytorch

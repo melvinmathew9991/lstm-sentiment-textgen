@@ -441,3 +441,132 @@ T=2.5  alice was beginning to added we wider across course clock girls
 ### Next: Phase 5 — CLI
 Mostly done already: all four subcommands are implemented and working. Phase 5 is the *hardening* pass — `--max-steps` plumbed through both tasks, exit codes, running from any working directory, and `test_generate_command_signature` as the explicit D1 regression test.
 **Closes D1.** Branch `phase-5-cli`, tag `v0.6.0`.
+
+---
+
+## Phase 5 — CLI ✅ complete (2026-08-30)
+
+**Closes D1** (and completes D10). The smallest phase by code volume and, in
+hindsight, the one whose test is the most reusable thing in the repository.
+
+### The D1 proof
+
+The reference died at `engine.py:48`:
+
+```
+train.generate_paragraph(model, test_words, 12, 10)     # 4 arguments
+```
+
+against a function declaring seven parameters. Python raises `TypeError` for
+that only when the line *executes* — and that line sat after the training loop,
+so the failure surfaced roughly forty minutes into every run, discarding the
+model it had just spent forty minutes fitting. A defect with a one-second fix
+and a forty-minute feedback loop.
+
+What replaced it is not a test of that call. `tests/test_call_signatures.py`
+parses the whole package — **55 functions across 21 modules** — resolves **83
+internal call sites** and checks each against the arity of the function it
+names. The whole sweep runs in under a second.
+
+### Verified (real output)
+
+All four subcommands, run from `C:\Users` — a **different drive** from the
+repository, which is a stronger check than a sibling directory on `D:`:
+
+```
+$ python -m lstm_nlp.cli predict --ckpt <abs>/best.pt "the flight was not great"
+  'the flight was not great'
+    POSITIVE  p(positive)=0.751
+  model test accuracy 0.8972 (majority-class baseline 0.7953,
+                              macro-F1 0.8485 vs 0.4430)
+exit 0
+
+$ python -m lstm_nlp.cli eval --ckpt <abs>/best.pt --split test
+                    value    baseline      lift
+  accuracy         0.8972     0.7953   +0.1019
+  macro-F1         0.8485     0.4430   +0.4055
+  ROC-AUC          0.9366     0.5000   +0.4366
+exit 0
+
+$ python -m lstm_nlp.cli generate --ckpt <abs>/best.pt --seed "alice was" --n-words 20
+  temperature 0.7   top-k 40   vocabulary 2,436
+  alice was so much then she heard with his head is it s a little of
+  the door she found a long
+exit 0
+```
+
+Error paths, which are the half of a CLI that usually goes untested:
+
+```
+$ ... predict --ckpt /nope/missing.pt "hello"
+  ERROR __main__: CheckpointError: checkpoint not found: ...\nope\missing.pt      exit 1
+$ ... generate --ckpt <valid> --seed "alice was" --temperature -1
+  ERROR __main__: DataError: temperature must be > 0, got -1.0. For greedy
+  decoding use a small temperature such as 0.01, or call argmax directly.      exit 1
+$ ... generate --nonsense
+  lstm-nlp generate: error: the following arguments are required: --ckpt        exit 2
+```
+
+Not a traceback anywhere.
+
+### Built
+- `tests/test_call_signatures.py` — 7 tests, the package-wide D1 checker.
+- `tests/test_cli_integration.py` — 26 tests, the CLI as a user invokes it.
+- `cli.py` — exhaustive exit-code handling.
+- `slow` / `realdata` markers moved from `conftest.py` into `pyproject.toml`.
+
+### Decisions
+1. **The D1 gate was widened from the planned `test_generate_command_signature`
+   to a whole-package checker,** and `Phases.md` was amended to match. Testing
+   the one call that broke would have proved only that I had read the bug
+   report. Testing the *shape* of the defect covers the 83 call sites that
+   exist now and every one added later — the same reasoning that made the D8
+   test catch a brand-new bug in Phase 2.
+2. **The checker carries negative controls.** `test_the_checker_detects_the_
+   reference_defect` reconstructs the original four-argument call and asserts
+   it is flagged; `test_the_checker_found_call_sites_to_check` asserts a floor
+   of 20 resolved call sites. A checker that has never been observed to fail is
+   indistinguishable from one that is broken, and would have passed happily on
+   the reference itself if its AST walk were subtly wrong.
+3. **Test level chosen per claim, not per file.** Argument handling and exit
+   codes are properties of the code, so they run in-process; only directory
+   independence and cross-invocation reproducibility are genuinely about the
+   *process*, so only those pay for a subprocess and carry `slow`. Getting this
+   split wrong pushed the suite past its 60s budget (NFR-6) the first time.
+4. **A bad `--temperature` exits 1, not 2.** argparse validates the *shape* of
+   the arguments; the config layer validates their *domain*. `-1` is a
+   well-formed float, so it parses and is then rejected by the same validator
+   the API and frontend will use. Deliberate: one place decides what a legal
+   temperature is, and the exit code reflects where the failure occurred.
+5. **The `slow` marker forced a CI change.** Adding `-m 'not slow'` as the
+   default would have made CI's `pytest -v` silently stop running the training
+   tests — a green build that tests less than it did the day before is worse
+   than a red one. CI now runs `pytest -v -m ""` explicitly, with a comment
+   saying why.
+
+### Surprises / corrections
+- **The stranded changelog entries.** `scripts/audit.py` and two doc fixes
+  landed in `5faea44`, an ancestor of the `v0.5.0` tag, so they shipped in
+  0.5.0 — but they were still sitting under `## [Unreleased]`. Moved to the
+  release that actually contains them. The audit's own "CHANGELOG covers every
+  tag" check does not catch this, because every tag *did* have a section; the
+  gap is entries filed under the wrong one.
+- **`--temperature -1` reaching the checkpoint loader before the validator**
+  looked like a missing argparse check at first. It is not: it is the
+  single-source-of-truth design working as intended (decision 4). Worth
+  recording, because "add `type=positive_float` to argparse" is the obvious
+  wrong fix and would have created a second definition of a legal temperature.
+
+### Audit
+**21 pass · 1 warn · 0 fail · 1 skip.** 306 tests (301 on the fast path).
+The warn is "tags match completed phases": 5 tags for 6 completed phases, and it
+clears when `v0.6.0` lands on merge. I had written `22 pass · 0 warn` here before
+running it — a predicted number in the log, which is the A4 violation this file
+exists to prevent. Corrected against the real output.
+
+### Next: Phase 6 — FastAPI service
+The HTTP contract from `Architecture.md` §6. Gate: every endpoint plus the 422
+and 503 paths. `Rules.md` C15 already binds the phase after it — the frontend
+never runs inference — so the API is the *only* inference path from here on,
+and its response shapes are what Phase 7 will render.
+Branch `phase-6-api`, tag `v0.7.0`.

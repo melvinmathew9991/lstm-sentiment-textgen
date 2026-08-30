@@ -221,7 +221,12 @@ python -m lstm_nlp.cli generate --ckpt runs/textgen/<ts>/best.pt \
 
 ### Exit criteria
 - All four run clean from a directory other than `pytorch/`.
-- `test_generate_command_signature`: dispatch invoked with real args — the argument-count regression that killed the reference (**D1**) cannot recur.
+- `tests/test_call_signatures.py`: every call site in the package is checked
+  against the arity of the function it names, so the argument-count regression
+  that killed the reference (**D1**) cannot recur *anywhere* — not merely at the
+  one call that broke. The checker carries negative controls, including a
+  reproduction of `train.generate_paragraph(model, test_words, 12, 10)` that it
+  is required to flag.
 - `--help` is accurate for every subcommand.
 - Bad `--ckpt` gives a clear message, not a traceback.
 
@@ -350,7 +355,7 @@ Candidates, in rough value order:
 | P2 Sentiment | ✅ **done** 2026-08-29 | D4, D5, D8, D11 | macro-F1 **0.8485** vs 0.4430 · 213 tests |
 | P3 Text-gen | ✅ **done** 2026-08-29 | D6, D9 | ppl **223.54** vs 2,436 · RSS 421 MB |
 | P4 Sampling | ✅ **done** 2026-08-29 | **D2**, D10 | entropy 1.03 -> 7.76 monotonic · 273 tests |
-| P5 CLI | ⬜ | **D1**, D10 | 4 commands from any CWD |
+| P5 CLI | ✅ **done** 2026-08-30 | **D1**, D10 | 4 commands from `C:\Users` · 306 tests |
 | P6 FastAPI backend | ⬜ | — | all endpoints + 422/503 |
 | P7 Streamlit frontend | ⬜ | — | S17 · S18 · S19 · temperature visible |
 | P8 Parity | ⬜ | D11 | `PARITY.md`, 11/11 closed |

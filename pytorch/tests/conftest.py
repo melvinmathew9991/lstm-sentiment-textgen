@@ -19,10 +19,6 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 DATA_DIR = REPO_ROOT / "data"
 
 
-def pytest_configure(config: pytest.Config) -> None:
-    config.addinivalue_line("markers", "realdata: needs the full corpora in data/")
-
-
 @pytest.fixture(scope="session")
 def fixtures_dir() -> Path:
     return FIXTURES

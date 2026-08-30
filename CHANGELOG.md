@@ -7,22 +7,65 @@ Defect IDs (D1-D11) refer to `PRD.md` section 1.1.
 
 ## [Unreleased]
 
-### Added
-- `pytorch/scripts/audit.py`: end-to-end project audit, 23 checks across tests,
-  standards conformance, documentation consistency and git hygiene. Run after
-  every phase; non-zero exit on any failure. Wired into CI as its own job.
-
-### Fixed
-- `Rules.md` A4 cited a superseded one-hot figure (707 MB) in the very rule
-  that forbids inventing numbers. Corrected to 931 MB.
-- Docstrings added to four public properties.
-
 ### Planned
-- Phase 5: CLI (closes **D1**)
 - Phase 6: FastAPI backend
 - Phase 7: Streamlit frontend
 - Phase 8: parity report
 - Phase 9: hardening
+
+## [0.6.0] - 2026-08-30 - Phase 5: CLI
+
+Closes **D1**. The reference died at `engine.py:48`:
+
+    train.generate_paragraph(model, test_words, 12, 10)     # 4 arguments
+
+against a function declaring seven parameters. Python raises that only when the
+line executes, and that line sat after the training loop -- so the run failed
+roughly forty minutes in, every time, having thrown away the model it had just
+spent those forty minutes fitting.
+
+The fix is not a test of that one call. It is a static check of *every* call,
+because a regression test aimed at a defect's instance catches the instance,
+while one aimed at its shape catches the next one too.
+
+### Added
+- `tests/test_call_signatures.py`: package-wide call-signature checker. Parses
+  every module, indexes **55 functions across 21 modules**, resolves **83
+  internal call sites** and checks each against the arity of the function it
+  names. Runs in under a second rather than after a hundred epochs. It carries
+  negative controls -- a reconstruction of the D1 call that it is required to
+  flag, and a floor on resolved call sites, so the check cannot pass by
+  quietly resolving nothing.
+- `tests/test_cli_integration.py`: the CLI as a user invokes it. In-process
+  `main(argv)` for argument handling, exit codes and error reporting;
+  subprocess, marked `slow`, only for the two claims that are genuinely about
+  the process -- running from an unrelated working directory, and
+  reproducibility across separate invocations.
+- `slow` and `realdata` pytest markers declared in `pyproject.toml`. The
+  default run excludes `slow` to hold the 60-second budget (NFR-6); CI runs
+  `pytest -m ""` so the training tests are not skipped there.
+- 33 tests (**306 total**; 301 on the default fast path).
+
+### Fixed
+- **D1**: no call site in the package can now acquire an arity mismatch
+  without the suite failing in under a second.
+- Exit codes are exhaustive: **0** success, **1** runtime error, **2** usage
+  error. `FileNotFoundError` and `OSError` report a message rather than a
+  traceback, and a final `except Exception` logs the traceback for diagnosis
+  but still returns through the documented code, so no path dumps a raw trace
+  at the user.
+- The `slow` marker introduced here would have made CI's `pytest -v` skip
+  every test that trains, silently. CI now runs `pytest -v -m ""`.
+
+### Verified
+All four subcommands run clean from `C:\Users` -- a different drive from the
+repository -- resolving every path from the checkpoint and `__file__`:
+
+    predict   'the flight was not great' -> POSITIVE  p=0.751        exit 0
+    eval      macro-F1 0.8485 vs 0.4430 baseline on the test split   exit 0
+    generate  20 words at T=0.7, top-k 40                            exit 0
+    predict --ckpt <missing>  -> "checkpoint not found: ..."         exit 1
+    generate --nonsense       -> argparse usage error                exit 2
 
 ## [0.5.0] - 2026-08-29 - Phase 4: Sampling & generation
 
@@ -46,6 +89,9 @@ vocabulary regardless of the setting, which is what its own saved notebook
 output shows.
 
 ### Added
+- `pytorch/scripts/audit.py`: end-to-end project audit, 23 checks across tests,
+  standards conformance, documentation consistency and git hygiene. Run after
+  every phase; non-zero exit on any failure. Wired into CI as its own job.
 - `inference/sampler.py`: `apply_top_k`, `temperature_distribution`,
   `sample_from_logits`, `greedy_from_logits`, `distribution_entropy`,
   `top_tokens`. Temperature scales logits and nothing else.
@@ -57,6 +103,9 @@ output shows.
 - 42 tests (273 total), including the S5 property gates.
 
 ### Fixed
+- `Rules.md` A4 cited a superseded one-hot figure (707 MB) in the very rule
+  that forbids inventing numbers. Corrected to 931 MB.
+- Docstrings added to four public properties.
 - **D2**: `softmax(logits / T)`. Models return logits, so no probability vector
   exists to divide by mistake -- the reference's error is unrepresentable here.
   A test reproduces that error deliberately and asserts it is indistinguishable
