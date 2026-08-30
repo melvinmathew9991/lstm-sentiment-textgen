@@ -83,10 +83,11 @@ cd pytorch && pip install -e . && python -m lstm_nlp.cli --help && pytest -q
 |---|---|
 | Sentiment rows | 11,541 (9,178 neg / 2,363 pos) |
 | Train / test | 8,078 / 3,463 · pos rate 0.2048 / 0.2047 |
+| — train splits again (Phase 8) | 6,866 train / 1,212 val · pos rate 0.2048 / 0.2046 |
 | Token length | median 20 · p95 27 · max 35 |
 | Train-only raw vocab | 9,566 |
-| Vocab @ `min_freq=2` | **4,505** (incl. `<pad>`, `<unk>`) |
-| Test OOV rate | **5.23%** (3,384 / 64,707 tokens) |
+| Vocab @ `min_freq=2` | **4,505** on all 8,078 train rows; **4,083** on the 6,866-row training block the model actually uses (Phase 8) |
+| Test OOV rate | **5.23%** at V=4,505; **5.68%** at V=4,083 |
 | Class weight (pos) | 3.884 |
 | Alice raw → stripped | 164,045 → 144,607 chars (88.2% kept) |
 | Alice tokens | **27,429** (was 30,674 unstripped) |
@@ -123,7 +124,7 @@ pytest tests/test_preprocess.py tests/test_vocab.py tests/test_datasets.py -v
 **Effort:** M · **Depends on:** P1 · **Closes:** D4, D5, D8, D11
 
 ### Tasks
-1. `models/sentiment_lstm.py` — `Embedding(V,64,padding_idx=0)` → 2-layer `LSTM(64,64)` → `Dropout(0.4)` → `Linear(64,2)`. `pack_padded_sequence` around the LSTM. **Returns logits. (C1, C10)** Target ≈ **355,010** params at V=4,505.
+1. `models/sentiment_lstm.py` — `Embedding(V,64,padding_idx=0)` → 2-layer `LSTM(64,64)` → `Dropout(0.4)` → `Linear(64,2)`. `pack_padded_sequence` around the LSTM. **Returns logits. (C1, C10)** ≈ **355,010** params at V=4,505, **328,002** at the V=4,083 the model now trains with.
 2. `engine/metrics.py` — `classification_metrics()` returning accuracy, macro-F1, per-class P/R/F1, confusion matrix, ROC-AUC, **each beside its baseline** (acc 0.7953, macro-F1 0.4430). **(D4, C11)**
 3. `engine/callbacks.py` — `EarlyStopping(monitor, mode, patience)` and `BestCheckpoint` holding the best `state_dict` in memory and restoring it at the end. **(D5, C12)**
 4. `engine/trainer.py` — task-agnostic loop: epochs, `clip_grad_norm_(5.0)`, val each epoch, callbacks, `history.json`, tqdm.
@@ -352,7 +353,7 @@ Candidates, in rough value order:
 |-------|--------|--------|------|
 | P0 Scaffold | ✅ **done** 2026-08-29 | — | 52 tests green · `--help` lists 4 cmds |
 | P1 Data layer | ✅ **done** 2026-08-29 | D3, D6, D7, D9 | 146 tests green · measured values asserted |
-| P2 Sentiment | ✅ **done** 2026-08-29 | D4, D5, D8, D11 | macro-F1 **0.8485** vs 0.4430 · 213 tests |
+| P2 Sentiment | ✅ **done** 2026-08-29 | D4, D5, D8, D11 | macro-F1 **0.8391** vs 0.4430 (corrected in P8; 0.8485 was selected on test) · 213 tests |
 | P3 Text-gen | ✅ **done** 2026-08-29 | D6, D9 | ppl **223.54** vs 2,436 · RSS 421 MB |
 | P4 Sampling | ✅ **done** 2026-08-29 | **D2**, D10 | entropy 1.03 -> 7.76 monotonic · 273 tests |
 | P5 CLI | ✅ **done** 2026-08-30 | **D1**, D10 | 4 commands from `C:\Users` · 306 tests |

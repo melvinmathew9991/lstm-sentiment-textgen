@@ -109,7 +109,7 @@ Wide layout, persistent sidebar. Two pages via `st.navigation`.
 │              │  [ result region ]                               │
 │  ─────────   │                                                  │
 │  Model info  │                                                  │
-│  vocab 4,505 │                                                  │
+│  vocab 4,083 │                                                  │
 │  macroF1 .81 │                                                  │
 │  base   .443 │                                                  │
 └──────────────┴──────────────────────────────────────────────────┘

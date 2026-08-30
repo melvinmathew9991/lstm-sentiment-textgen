@@ -11,6 +11,89 @@ Defect IDs (D1-D11) refer to `PRD.md` section 1.1.
 - Phase 8: parity report
 - Phase 9: hardening
 
+## [0.8.1] - 2026-08-30 - Held-out evaluation, and a serving guard
+
+An end-to-end review before Phase 8, run because `PARITY.md` is about to
+publish these numbers. It found two defects in the project's own work. Both are
+of the kind this project exists to eliminate: a claim that was not measured the
+way it was described.
+
+### Fixed
+- **The sentiment model was selected on the test split.** `train_sentiment`
+  passed the test loader to `fit`, so early stopping and best-weight restoration
+  maximised macro-F1 on the very rows the headline number was reported for. The
+  training history shows it plainly -- epoch 6 was chosen as the maximum over 11
+  evaluations, and its 0.8485 / 0.8972 -- now superseded -- are exactly the
+  figures that were published.
+
+  There is now a real validation block, carved out of **train** so the test
+  block keeps precisely the 3,463 rows it always had. Selection sees `val`;
+  `test` is scored once. Measured cost of the old protocol:
+
+        macro-F1   accuracy   ROC-AUC
+        0.8485      0.8972     0.9366    selected on test (superseded)
+        0.8391      0.8926     0.9303    held out, scored once
+        +0.0094     +0.0046    +0.0063   optimism
+
+  The gate is unaffected: 0.8391 still clears the >= 0.75 target against a
+  0.4430 baseline. What changes is that the number now means what it says.
+  Reported honestly, the model also trains on 15% fewer rows, so part of the
+  drop is lost data rather than lost optimism -- the true optimism is a little
+  smaller than +0.0094.
+
+- **A `--max-steps` smoke run silently became the served model.** Checkpoint
+  resolution picks the newest run, and the documented smoke command
+  (`Rules.md` B7) writes a run directory like any other. Running it replaced the
+  API's model with a half-trained one -- macro-F1 **0.6997** against the
+  0.8485 of the day (itself superseded) --
+  with nothing in the logs, the checkpoint, or the UI saying so. Runs now record
+  `max_steps`, and resolution skips those that have it. An explicit
+  `LSTM_NLP_*_CKPT` still points wherever it is told: naming a file is a
+  decision, and the guard only stops an accident.
+
+- `lstm-nlp eval --split val` evaluated the test split. It now evaluates
+  validation, which is finally a real block.
+
+### Changed
+- Vocabulary is built on the 6,866-row training block: **4,083** tokens, test
+  OOV **5.68%** (4,505 / 5.23% when built on all 8,078 train rows). The FR-6
+  split itself is unchanged, so Phase 1's figures still describe it correctly --
+  both numbers are true of different things and neither is deleted.
+- The S8 negation test now aggregates over five pairs instead of gating on one.
+  The old form asserted `gap > 0.15` for "the flight was (not) great" alone, and
+  that pair moves only 0.984 -> 0.900 on the new model while "service was (not)
+  good" moves 0.806 -> 0.145 and crosses. Judged on one pair it looked like a
+  regression; judged over five, negation sensitivity had improved. A per-pair
+  threshold was measuring the run, not the model. This is a strengthening, and
+  it is recorded rather than quietly adjusted (`Rules.md` section 11.1).
+- The sentiment page's third preset is now "service was not good", so the page
+  shows a pair that crosses the boundary next to one that only moves. Showing
+  only the flip would be a demo.
+- **The `LICENSE` file has been removed** at the maintainer's request. The code
+  now carries no licence and no usage rights are granted. The dataset terms in
+  `README.md` are unaffected -- they are imposed by Figure Eight/Kaggle and
+  Project Gutenberg, not by this repository.
+
+### Known, recorded, not fixed
+- **Probabilities are over-confident.** ECE 0.066 on test; inputs scored ~0.75
+  are positive about 46% of the time. This is the expected consequence of
+  `class_weighting: balanced` (3.884:1), which is the right trade for macro-F1
+  but decouples the outputs from the data's prior. The UI presents them as
+  probabilities.
+- **2.48% of test rows duplicate a training row** (86 of 3,463), mostly stubs
+  like `"<user> thanks"`; five distinct cleaned texts carry both labels. Corpus
+  noise rather than a split defect, but it inflates scores slightly.
+- **Text-gen has no held-out test block.** Its perplexity is measured on the
+  split early stopping used. S4 asks for "validation perplexity", so the label
+  is honest, but the selection effect is the same one fixed above. Left alone
+  deliberately: adding a third block would rebuild the text-gen vocabulary and
+  move the uniform baseline (2,436 / 7.7981 nats) that the entire D2
+  demonstration is quoted against.
+- **The audit's defect-coverage check is loose.** It substring-matches over the
+  concatenated text of every test file, so D10 is "covered" by the word
+  `config` appearing somewhere; its intended needle `magic` matches nothing. A
+  real D10 test exists, but the check would not notice if it were deleted.
+
 ## [0.8.0] - 2026-08-30 - Phase 7: Streamlit frontend
 
 Two pages over the HTTP contract, holding no model state. The generation page
@@ -165,7 +248,8 @@ while one aimed at its shape catches the next one too.
   gitignored, so every test needing a trained checkpoint skips there:
   `test_predictor.py` (21), `test_trained_sentiment.py` (11),
   `test_trained_textgen.py` (10) and 9 of `test_cli_integration.py`. **No
-  headline figure in this changelog -- macro-F1 0.8485, perplexity 223.54, the
+  headline figure in this changelog -- macro-F1 0.8485 (superseded; see 0.8.1),
+  perplexity 223.54, the
   D2 entropy curve -- has ever been verified by CI.** They are reproducible
   from a fixed seed on a machine that has trained the models, and that is all
   they currently claim. The D1 checker itself does run in CI (7 passed), as
@@ -178,7 +262,7 @@ All four subcommands run clean from `C:\Users` -- a different drive from the
 repository -- resolving every path from the checkpoint and `__file__`:
 
     predict   'the flight was not great' -> POSITIVE  p=0.751        exit 0
-    eval      macro-F1 0.8485 vs 0.4430 baseline on the test split   exit 0
+    eval      macro-F1 0.8485 vs 0.4430 on the test split   exit 0   <- superseded
     generate  20 words at T=0.7, top-k 40                            exit 0
     predict --ckpt <missing>  -> "checkpoint not found: ..."         exit 1
     generate --nonsense       -> argparse usage error                exit 2
@@ -265,8 +349,12 @@ Validation perplexity **223.54** against a uniform-guess baseline of 2,436 --
 
 Closes D4, D5, D8, D11.
 
-Test macro-F1 **0.8485** against a majority-class baseline of 0.4430
-(+0.4055). Accuracy 0.8972 against 0.7953. ROC-AUC 0.9366. Positive-class
+*Superseded by 0.8.1: these were selected on the test split. The corrected
+held-out figures are 0.8391 / 0.8926 / 0.9303.*
+
+Test macro-F1 **0.8485** (superseded) against a majority-class baseline of
+0.4430 (+0.4055). Accuracy 0.8972 (superseded). ROC-AUC 0.9366 (superseded).
+Positive-class
 recall 0.8068 -- the minority class the reference's setup could ignore for
 free. Trained in 1m34s on CPU; early stopping fired at epoch 11 and restored
 epoch 6.

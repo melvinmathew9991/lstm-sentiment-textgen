@@ -127,8 +127,8 @@ Populated as phases complete. Every figure is measured, and every metric is repo
 
 | Metric | Baseline | Result |
 |---|---|---|
-| Sentiment accuracy | 0.7953 (majority class) | **0.8972**  (+0.1019) |
-| Sentiment macro-F1 | 0.4430 (majority class) | **0.8485**  (+0.4055) |
+| Sentiment accuracy | 0.7953 (majority class) | **0.8926**  (+0.0973) |
+| Sentiment macro-F1 | 0.4430 (majority class) | **0.8391**  (+0.3961) |
 | Text-gen perplexity | 2,436 (uniform over vocab) | **223.54**  (10.9x better) |
 
 Note on the original's headline number: its 0.909 validation accuracy is **not** a target. It was produced by a model trained on negation-stripped text (D3), reported without a baseline it barely clears (D4), and saved at its worst epoch (D5). Reproducing it would not be evidence of anything. See [`PRD.md` §6.3](PRD.md).
@@ -137,9 +137,11 @@ Note on the original's headline number: its 0.909 validation accuracy is **not**
 
 ## Data & licensing
 
-**Code** in this repository is MIT licensed ([`LICENSE`](LICENSE)).
+**Code** in this repository carries no licence. No usage rights are granted;
+all rights are reserved by default.
 
-**Datasets** in `data/` are third-party and carry their own terms:
+**Datasets** in `data/` are third-party and carry their own terms, which are
+imposed by their sources and are unaffected by the above:
 
 | File | Source | Licence |
 |---|---|---|

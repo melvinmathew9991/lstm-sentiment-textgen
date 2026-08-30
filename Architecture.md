@@ -151,10 +151,13 @@ clean_tweet()                lowercase · http…→<url> · @x→<user> · &amp
         ▼
 stratified split 70/30       random_state=10 · train pos 0.2048 · test pos 0.2047
   [FR-6]                     8,078 train / 3,463 test
+                             train then splits 6,866 / 1,212 val  [Phase 8]
         │
         ├──── TRAIN ONLY ───▶ Vocab.build(min_freq=2)   [FR-4 · fixes D7]
-        │                     9,566 raw → 4,505 kept (incl <pad>=0, <unk>=1)
-        │                     test OOV = 5.23% of tokens → all map to <unk>
+        │                     built on the 6,866-row training block  [Phase 8]
+        │                     8,703 raw → 4,083 kept (incl <pad>=0, <unk>=1)
+        │                     test OOV = 5.68% of tokens → all map to <unk>
+        │                     (4,505 / 5.23% when built on all 8,078 train rows)
         ▼
 encode + truncate to max_len=30  ·  int64 indices, NEVER one-hot  [FR-8]
         │
@@ -164,7 +167,7 @@ DataLoader(batch=64, collate_fn=pad_to_longest_in_batch)
         ▼
 ┌───────────────────────────────────────────────────────┐
 │ SentimentLSTM                                          │
-│   Embedding(4505, 64, padding_idx=0)          288,320 │
+│   Embedding(4083, 64, padding_idx=0)          261,312 │
 │   LSTM(64→64, 2 layers, dropout=0.3)           66,560 │
 │   Dropout(0.4)                                        │
 │   Linear(64, 2)                                   130 │
@@ -292,7 +295,7 @@ The direct fix for **D8**: the old `.h5` is unusable because the vocab that defi
                    "lstm_nlp": "0.1.0"},
 
   "model_class": "SentimentLSTM",
-  "model_cfg":   {"vocab_size": 4505, "embed_dim": 64, "hidden_dim": 64,
+  "model_cfg":   {"vocab_size": 4083, "embed_dim": 64, "hidden_dim": 64,
                   "num_layers": 2, "dropout": 0.3, "num_classes": 2},
   "model_state": {...},                    # state_dict of the BEST epoch
 
