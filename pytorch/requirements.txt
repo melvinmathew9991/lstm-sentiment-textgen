@@ -16,7 +16,13 @@ tqdm>=4.66
 fastapi>=0.110
 uvicorn>=0.27
 
+# frontend (Rules.md section 2). Declared here rather than left transitive:
+# frontend/charts.py imports altair directly, and a direct import that relies
+# on someone else's dependency tree breaks the day they drop it.
+streamlit>=1.40,<2
+altair>=6.0,<7
+httpx>=0.27,<1        # the frontend's HTTP client, and starlette's TestClient transport
+
 # dev
 pytest>=8.0
 ruff>=0.4
-httpx>=0.27  # starlette TestClient transport
