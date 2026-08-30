@@ -38,7 +38,10 @@ watched instead.
   tests run the real Streamlit pages against a real `uvicorn` process.
 - `tiny_runs` fixture moved into `conftest.py` and shared with the API suite --
   two definitions of "a valid checkpoint tree" would eventually disagree.
-- 44 tests (**399 total**; 385 on the default fast path, 34.7s).
+- `tests/test_dependencies.py`: every third-party import under `src/`,
+  `frontend/` and `tests/` must be declared in `requirements.txt` (Rules.md
+  section 11.2 -- a new invariant means a new check).
+- 52 tests (**407 total**; 393 on the default fast path, 33.7s).
 
 ### Measured
 
@@ -57,6 +60,14 @@ Contrast, computed rather than eyeballed, against the chart surface:
   `Design.md` section 2 rather than the value being quietly swapped.
 - `use_container_width` is deprecated with a removal date that has already
   passed; replaced with `width="stretch"`.
+- **`streamlit` and `altair` were imported but never declared.** Rules.md
+  section 2 had listed them as required since Phase 0; `requirements.txt` had
+  never caught up, because no phase before this one imported them. They worked
+  locally and failed collection on a clean CI install. Now declared there and
+  as a `frontend` extra, so installing the backend does not drag Streamlit in.
+  `altair` is named explicitly rather than left transitive through Streamlit:
+  `charts.py` imports it directly, and a direct import resting on someone
+  else's dependency tree breaks the day they drop it.
 
 ### Note
 The audit reports **0 skip** for the first time. Its frontend-purity check

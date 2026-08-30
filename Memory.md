@@ -900,10 +900,34 @@ Form first, colour last:
   two definitions of "a valid checkpoint tree" would eventually disagree about
   what one is.
 
+### The dependency CI caught and I could not
+
+`streamlit` and `altair` are imported by `frontend/` and by the suite, and were
+declared **nowhere**. `Rules.md` §2 has listed them as required since Phase 0;
+`requirements.txt` never caught up, because no phase before this one imported
+them. Locally everything passed — the packages were already on the machine. CI
+installed from `requirements.txt` into a clean environment and collection died:
+
+```
+ModuleNotFoundError: No module named 'streamlit'
+```
+
+An undeclared import is invisible until someone installs from scratch, which is
+the one environment a developer never uses. This is the mirror image of the
+Phase 5 finding: there, CI silently tested *less* than I thought; here, CI
+tested something my machine could not. Both come from the same place — assuming
+the environment I can see is the environment that matters.
+
+`tests/test_dependencies.py` is the check for the shape rather than the
+instance (`Rules.md` §11.2). Verified against the real defect by removing
+`streamlit` from `requirements.txt` in memory and confirming it fails with
+`streamlit (imported by frontendpp.py) -> expected 'streamlit'`.
+
 ### Audit
 **21 pass · 2 warn · 0 fail · 0 skip.** First run with **no skips** — the
 frontend-purity check (C15) has been skipping since Phase 0 for want of a
-`frontend/` to scan. 399 tests (385 fast).
+`frontend/` to scan. 407 tests (393 fast). In CI: 354 passed, 53 skipped, up
+from 302 passed last phase.
 
 ### Next: Phase 8 — Parity & reporting
 `PARITY.md`: the PyTorch metrics against the frozen Keras reference, with every
