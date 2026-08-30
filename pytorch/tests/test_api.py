@@ -20,7 +20,6 @@ from __future__ import annotations
 
 import statistics
 import time
-from collections import Counter
 from pathlib import Path
 
 import pytest
@@ -29,61 +28,18 @@ from fastapi.testclient import TestClient
 
 from lstm_nlp.api import app as app_module
 from lstm_nlp.api.schemas import MAX_BATCH, MAX_TEMPERATURE, MAX_WORDS
-from lstm_nlp.inference.checkpoint import save_checkpoint
-from lstm_nlp.models.sentiment_lstm import SentimentLSTM
-from lstm_nlp.models.textgen_lstm import TextGenLSTM
-from lstm_nlp.vocab import Vocab
-
-SEQ_LEN = 6
-MAX_LEN = 12
-
-WORDS = [
-    "flight", "late", "crew", "rude", "great", "thanks", "delayed", "bag",
-    "alice", "was", "beginning", "to", "get", "very", "tired", "of", "sitting",
-]
+from tests.conftest import TINY_WORDS as WORDS
 
 
-@pytest.fixture(scope="module")
-def vocab() -> Vocab:
-    """A small but real vocabulary -- the same class production loads."""
-    return Vocab.build(Counter({w: 5 for w in WORDS}), min_freq=1)
+@pytest.fixture
+def checkpoints(tiny_runs: Path) -> Path:
+    """The shared tiny-checkpoint tree, from ``conftest``.
 
-
-@pytest.fixture(scope="module")
-def checkpoints(tmp_path_factory: pytest.TempPathFactory, vocab: Vocab) -> Path:
-    """A ``runs/`` tree holding one tiny checkpoint per task.
-
-    Weights are random. The point is that the *files* are complete and loadable
-    with nothing else present, which is the D8 contract the API depends on.
+    Defined there rather than here because the frontend suite needs the same
+    thing, and two definitions of "a valid checkpoint tree" would eventually
+    disagree about what one is.
     """
-    torch.manual_seed(0)
-    root = tmp_path_factory.mktemp("runs")
-
-    sentiment = SentimentLSTM(vocab_size=len(vocab), embed_dim=8, hidden_dim=8, num_layers=1)
-    save_checkpoint(
-        root / "sentiment" / "20260101T000000" / "best.pt",
-        task="sentiment",
-        model=sentiment,
-        model_cfg=sentiment.config(),
-        vocab=vocab,
-        preprocess={"max_len": MAX_LEN, "min_freq": 1},
-        metrics={"accuracy": 0.8972, "baseline_accuracy": 0.7953,
-                 "macro_f1": 0.8485, "baseline_macro_f1": 0.4430},
-        train_info={"seed": 42, "best_epoch": 3},
-    )
-
-    textgen = TextGenLSTM(vocab_size=len(vocab), embed_dim=8, hidden_dim=8, num_layers=1)
-    save_checkpoint(
-        root / "textgen" / "20260101T000000" / "best.pt",
-        task="textgen",
-        model=textgen,
-        model_cfg=textgen.config(),
-        vocab=vocab,
-        preprocess={"seq_len": SEQ_LEN, "min_freq": 1},
-        metrics={"perplexity": 223.54, "baseline_perplexity": 2436.0},
-        train_info={"seed": 42, "best_epoch": 3},
-    )
-    return root
+    return tiny_runs
 
 
 @pytest.fixture
