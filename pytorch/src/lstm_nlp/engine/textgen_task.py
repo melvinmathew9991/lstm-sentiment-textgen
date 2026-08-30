@@ -71,8 +71,8 @@ def textgen_metrics(logits: np.ndarray, targets: np.ndarray) -> dict[str, float]
 
 def build_loaders(
     splits: TextGenSplits, batch_size: int, seed: int, num_workers: int = 0
-) -> tuple[DataLoader, DataLoader]:
-    """Build train/validation loaders with a seeded shuffle generator.
+) -> tuple[DataLoader, DataLoader, DataLoader]:
+    """Build train/validation/test loaders with a seeded shuffle generator.
 
     Windows are shuffled for training -- the *split* is contiguous (so no window
     straddles the boundary, D6), but the order in which training windows are
@@ -159,14 +159,20 @@ def train_textgen(cfg: TextGenConfig, max_steps: int | None = None) -> Path:
         strip_boilerplate=cfg.data.strip_gutenberg,
     )
     vocab_size = len(splits.vocab)
-    storage_mb = (splits.train.storage_nbytes() + splits.val.storage_nbytes()) / 1e6
-    onehot_mb = (
-        splits.train.onehot_nbytes(vocab_size) + splits.val.onehot_nbytes(vocab_size)
-    ) / 1e6
+    # Every block, not just the two the model trains and selects on. This summed
+    # train+val until 2026-08-30, which was correct for the 90/10 split it was
+    # written for and wrong from v1.2.0 onward: it printed a token total that did
+    # not equal the sum of its own printed parts, and understated the D9
+    # comparison this line exists to make by 5% (0.21 MB vs 634 MB, against a
+    # true 0.22 MB vs 667 MB).
+    blocks = (splits.train, splits.val, splits.test)
+    storage_mb = sum(b.storage_nbytes() for b in blocks) / 1e6
+    onehot_mb = sum(b.onehot_nbytes(vocab_size) for b in blocks) / 1e6
     logger.info(
-        "tokens %d (train %d / val %d)  vocabulary %d  windows %d/%d",
+        "tokens %d (train %d / val %d / test %d)  vocabulary %d  windows %d/%d/%d",
         splits.n_tokens, splits.train.n_tokens, splits.val.n_tokens,
-        vocab_size, len(splits.train), len(splits.val),
+        splits.test.n_tokens, vocab_size,
+        len(splits.train), len(splits.val), len(splits.test),
     )
     logger.info(
         "index storage %.2f MB; the same windows one-hot would be %.0f MB (D9)",
@@ -233,7 +239,7 @@ def train_textgen(cfg: TextGenConfig, max_steps: int | None = None) -> Path:
         metrics=metrics,
         train_info={
             "seed": cfg.seed,
-            "best_epoch": history.best_epoch,
+            "best_epoch": history.best_epoch_number,
             "stopped_early": history.stopped_early,
             "epochs_run": len(history.epochs),
             # Non-None marks a truncated smoke run, so checkpoint

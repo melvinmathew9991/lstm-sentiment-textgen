@@ -7,6 +7,7 @@ import torch
 from torch import nn
 
 from lstm_nlp.engine.callbacks import BestWeights, EarlyStopping
+from lstm_nlp.engine.trainer import TrainingHistory
 from lstm_nlp.errors import ConfigError
 
 
@@ -142,3 +143,37 @@ def test_missing_monitor_key_raises_in_tracker() -> None:
     tracker = BestWeights("val_macro_f1", "max")
     with pytest.raises(ConfigError, match="val_macro_f1"):
         tracker.step(0, {"val_loss": 1.0}, tiny_model(0.0))
+
+
+# --------------------------------------------------------------------------- #
+# TrainingHistory -- what gets persisted must agree with itself
+# --------------------------------------------------------------------------- #
+
+
+def test_persisted_best_epoch_is_one_based_like_the_records_beside_it() -> None:
+    """FR-16: ``history.json`` must not contradict itself.
+
+    ``best_epoch`` is a zero-based index internally, while every ``epochs[]``
+    record carries a one-based ``epoch``. Persisting the raw index put
+    ``"best_epoch": 8`` next to the record labelled ``"epoch": 9`` -- nothing
+    computed with it, so nothing broke, and a reader of the artifact simply
+    could not tell which convention it was in. Asserted rather than left to
+    convention, because that is the only difference between a fixed defect and
+    a defect that is currently absent.
+    """
+    history = TrainingHistory()
+    for epoch in range(1, 5):
+        history.append({"epoch": epoch, "val_macro_f1": 0.5 + epoch / 100})
+    history.best_epoch = 2  # zero-based index of the third record
+
+    payload = history.to_dict()
+    best = payload["best_epoch"]
+    assert best == 3
+    match = [r for r in payload["epochs"] if r["epoch"] == best]
+    assert len(match) == 1, "best_epoch must name a record that exists"
+    assert match[0] is history.epochs[history.best_epoch]
+
+
+def test_persisted_best_epoch_is_none_when_nothing_was_selected() -> None:
+    """A run with no snapshot records no best epoch, rather than epoch 0."""
+    assert TrainingHistory().to_dict()["best_epoch"] is None

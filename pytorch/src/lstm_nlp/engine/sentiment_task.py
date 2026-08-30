@@ -216,7 +216,7 @@ def train_sentiment(cfg: SentimentConfig, max_steps: int | None = None) -> Path:
         metrics=report.to_dict(),
         train_info={
             "seed": cfg.seed,
-            "best_epoch": history.best_epoch,
+            "best_epoch": history.best_epoch_number,
             "stopped_early": history.stopped_early,
             "epochs_run": len(history.epochs),
             "class_weights": weights.tolist() if weights is not None else None,
