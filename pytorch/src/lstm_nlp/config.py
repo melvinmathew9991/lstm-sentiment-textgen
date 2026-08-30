@@ -73,6 +73,9 @@ class ModelConfig(_Base):
 class SentimentDataConfig(_Base):
     csv: Path
     test_size: float = Field(0.30, gt=0, lt=1)
+    #: Validation fraction **of the training block**, not of the whole dataset,
+    #: so tuning it never moves a row into or out of the test block.
+    val_size: float = Field(0.15, gt=0, lt=1)
     split_seed: int = 10  # pinned to match the frozen TF reference
     stratify: bool = True
     min_freq: int = Field(2, ge=1)
