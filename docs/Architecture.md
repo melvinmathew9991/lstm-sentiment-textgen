@@ -39,8 +39,11 @@ All quantities here were measured against the real data on 2026-08-29; they are 
 ```
 D:\Sentiment_Detection_and_Text Generation_with_Many-to-One\
 │
-├── PRD.md  Architecture.md  Rules.md  Phases.md      ← steering docs
-├── Memory.md                                          ← created at end of Phase 0
+├── README.md  CHANGELOG.md                            ← root by convention
+├── docs/                                              ← every steering document
+│   ├── PRD.md  Architecture.md  Rules.md  Phases.md
+│   ├── Design.md  PARITY.md
+│   └── Memory.md                                      ← created at end of Phase 0
 ├── LSTM part 2 Solution doc.pdf                       ← original course doc
 │
 ├── data/                          ← SINGLE shared copy (canonical)

@@ -10,6 +10,32 @@ Defect IDs (D1-D11) refer to `PRD.md` section 1.1.
 Nothing planned. Every limitation `PARITY.md` section 6 opened with is now
 either fixed or recorded with the reason it stands.
 
+## [1.2.1] - 2026-08-30 - Repository tidy
+
+### Changed
+- **The seven steering documents moved to `docs/`.** `README.md` and
+  `CHANGELOG.md` stay at the root, where GitHub and Keep-a-Changelog expect
+  them. Git recorded all seven as renames, so `git log --follow` still works.
+  `scripts/audit.py` holds the only paths that had to change; nothing in
+  `src/`, `tests/` or `frontend/` reads a document, so the rest of the tree was
+  untouched.
+- Removed `pytorch/.gitignore`: every rule in it was already in the root
+  `.gitignore`, so it was a second source of truth for one set of rules.
+
+### Removed
+- Build cruft: ten `__pycache__/` directories, `.pytest_cache/`, `.ruff_cache/`
+  and `lstm_nlp.egg-info/`. All gitignored, all regenerated on the next run.
+
+### Deliberately kept
+- `modular_code/`, `notebook/` and the solution PDF are the frozen reference
+  `Rules.md` B1 protects and `PARITY.md` compares against. `modular_code/output/`
+  holds `sentiment_model.h5` -- the 5 MB artifact that cannot be loaded, which is
+  the evidence for D8 and the subject of `PARITY.md` section 0. Deleting the
+  thing a report is about would be an odd way to tidy.
+- `pytorch/runs/` (12 MB, gitignored) holds the trained checkpoints the API,
+  the frontend and roughly fifty tests use. Regenerable in about three minutes,
+  but not junk.
+
 ## [1.2.0] - 2026-08-30 - A held-out block for text generation
 
 The last open item from `PARITY.md` section 6, and the one I had priced wrong.

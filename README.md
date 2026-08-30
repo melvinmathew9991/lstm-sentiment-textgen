@@ -23,7 +23,7 @@ The original implementation (preserved unmodified in [`modular_code/`](modular_c
 | **D4** | Accuracy was the only metric on 4:1 imbalanced data, where predicting "negative" always scores **0.795**. | Test split measured at 20.47% positive |
 | **D1** | The default execution path crashed with a `TypeError` — after ~100 epochs of training. | `engine.py:48` passes 4 of 7 required arguments |
 
-The full catalogue, with evidence for each, is in [`PRD.md` §1.1](PRD.md). Progress closing them is tracked in [`Phases.md`](Phases.md).
+The full catalogue, with evidence for each, is in [`PRD.md` §1.1](docs/PRD.md). Progress closing them is tracked in [`Phases.md`](docs/Phases.md).
 
 This is not a "port". A faithful reproduction of provably wrong code has negative value. Every defect is fixed, and each fix has a named regression test.
 
@@ -35,12 +35,12 @@ Read in this order. Together they are the specification; the code is the impleme
 
 | Document | Contents |
 |---|---|
-| [`PRD.md`](PRD.md) | Requirements, users, scope, the 11 defects, measurable success criteria |
-| [`Architecture.md`](Architecture.md) | Three-tier structure, data flow, model specs, checkpoint format, HTTP contract |
-| [`Rules.md`](Rules.md) | Library allow/deny list, 16 correctness invariants, error policy, git conventions |
-| [`Phases.md`](Phases.md) | Ten phases, each with exit criteria and a runnable verification command |
-| [`Design.md`](Design.md) | Frontend palette, typography, layout, component behaviour |
-| [`Memory.md`](Memory.md) | Running progress log — decisions, measurements, corrections |
+| [`PRD.md`](docs/PRD.md) | Requirements, users, scope, the 11 defects, measurable success criteria |
+| [`Architecture.md`](docs/Architecture.md) | Three-tier structure, data flow, model specs, checkpoint format, HTTP contract |
+| [`Rules.md`](docs/Rules.md) | Library allow/deny list, 16 correctness invariants, error policy, git conventions |
+| [`Phases.md`](docs/Phases.md) | Ten phases, each with exit criteria and a runnable verification command |
+| [`Design.md`](docs/Design.md) | Frontend palette, typography, layout, component behaviour |
+| [`Memory.md`](docs/Memory.md) | Running progress log — decisions, measurements, corrections |
 
 ---
 
@@ -59,6 +59,7 @@ Read in this order. Together they are the specification; the code is the impleme
 The frontend is a **pure API client** — it never imports the model code. One inference path means one set of results.
 
 ```
+├── docs/                  Steering documents (see the table above)
 ├── data/                  Datasets (see Licensing below)
 ├── modular_code/          FROZEN — original TensorFlow implementation
 ├── notebook/              FROZEN — original tutorial notebook
@@ -131,7 +132,7 @@ Populated as phases complete. Every figure is measured, and every metric is repo
 | Sentiment macro-F1 | 0.4459 (majority class) | **0.8300**  (+0.3841) |
 | Text-gen perplexity | 2,436 (uniform over vocab) | **223.54**  (10.9x better) |
 
-Note on the original's headline number: its 0.909 validation accuracy is **not** a target. It was produced by a model trained on negation-stripped text (D3), reported without a baseline it barely clears (D4), and saved at its worst epoch (D5). Reproducing it would not be evidence of anything. See [`PRD.md` §6.3](PRD.md).
+Note on the original's headline number: its 0.909 validation accuracy is **not** a target. It was produced by a model trained on negation-stripped text (D3), reported without a baseline it barely clears (D4), and saved at its worst epoch (D5). Reproducing it would not be evidence of anything. See [`PRD.md` §6.3](docs/PRD.md).
 
 ---
 

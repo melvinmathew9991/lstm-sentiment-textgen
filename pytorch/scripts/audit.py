@@ -157,7 +157,7 @@ def rel(path: Path) -> str:
 
 def current_phase() -> int:
     """Highest phase marked done in Phases.md."""
-    text = (REPO_ROOT / "Phases.md").read_text(encoding="utf-8")
+    text = (REPO_ROOT / "docs" / "Phases.md").read_text(encoding="utf-8")
     done = re.findall(r"\|\s*P(\d)\s[^|]*\|\s*✅", text)
     return max((int(d) for d in done), default=-1)
 
@@ -377,8 +377,11 @@ def check_todos() -> Result:
 # C. documentation consistency
 # --------------------------------------------------------------------------- #
 
-DOCS = ["PRD.md", "Architecture.md", "Rules.md", "Phases.md", "Design.md",
-        "README.md", "Memory.md", "CHANGELOG.md", "PARITY.md"]
+# The steering documents live in docs/; README.md and CHANGELOG.md stay at the
+# root, where GitHub and Keep-a-Changelog expect to find them.
+DOCS = ["docs/PRD.md", "docs/Architecture.md", "docs/Rules.md", "docs/Phases.md",
+        "docs/Design.md", "docs/Memory.md", "docs/PARITY.md",
+        "README.md", "CHANGELOG.md"]
 
 
 def check_docs_present() -> Result:
@@ -458,7 +461,7 @@ def check_phase_consistency() -> Result:
     """Phases.md, README.md and Memory.md must agree on what is done."""
     phase = current_phase()
     readme = (REPO_ROOT / "README.md").read_text(encoding="utf-8")
-    memory = (REPO_ROOT / "Memory.md").read_text(encoding="utf-8")
+    memory = (REPO_ROOT / "docs" / "Memory.md").read_text(encoding="utf-8")
     problems = []
     for p in range(phase + 1):
         if f"Phase {p} —" not in memory and f"Phase {p} -" not in memory:
