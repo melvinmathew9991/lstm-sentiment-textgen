@@ -108,8 +108,8 @@ def test_models_reports_metrics_with_their_baselines(client: TestClient) -> None
     """C11 at the HTTP boundary: a metric travels with what it is measured against."""
     body = client.get("/models").json()
     sentiment = next(m for m in body["models"] if m["task"] == "sentiment")
-    assert sentiment["metrics"]["macro_f1"] == 0.8485
-    assert sentiment["metrics"]["baseline_macro_f1"] == 0.4430
+    assert sentiment["metrics"]["macro_f1"] == 0.5000
+    assert sentiment["metrics"]["baseline_macro_f1"] == 0.2500
 
 
 def test_models_is_empty_not_broken_when_nothing_loaded(empty_client: TestClient) -> None:
@@ -509,8 +509,9 @@ def test_a_smoke_run_is_not_served(
 
     Found by running the documented smoke command (Rules.md B7) during the
     Phase 8 review: because resolution picks the newest run, the half-trained
-    model silently replaced the real one -- macro-F1 0.6997 against 0.8485,
-    with nothing anywhere saying so.
+    model silently replaced the real one -- macro-F1 0.6997 against the
+    0.8485 of the day (itself superseded twice since), with nothing anywhere
+    saying so.
 
     The smoke checkpoint here is *newer* than the real one, so a resolver that
     ignored the marker would pick it and this test would fail.

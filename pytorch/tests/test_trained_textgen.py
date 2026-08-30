@@ -78,6 +78,7 @@ def test_top1_accuracy_beats_chance(trained) -> None:
     assert metrics["top1_accuracy"] > 50 * metrics["baseline_top1"]
 
 
+@pytest.mark.fulltrain
 def test_early_stopping_fired(trained) -> None:
     """PRD S14 for this task -- evidence D5 is closed, not merely configured."""
     _, payload = trained

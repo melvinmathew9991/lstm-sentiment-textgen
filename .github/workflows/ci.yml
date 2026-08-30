@@ -38,17 +38,103 @@ jobs:
       - name: Verify no GPU wheels were pulled
         run: python -c "import torch; assert '+cu' not in torch.__version__, torch.__version__; print(torch.__version__)"
 
+      # Without a checkpoint, every test that loads a trained model skips at
+      # runtime -- and a skip is green, so nothing reports it. Measured on a
+      # clean tree 2026-08-30: `pytest -m ""` gives 391 passed and 53 SKIPPED,
+      # which is why no headline number in this repository had ever been
+      # verified by CI (Memory.md, Phase 5). A --max-steps run costs ~20s and
+      # recovers 49 of those 53.
+      #
+      # The remaining four assert model *quality* -- a macro-F1 gate, negation,
+      # minority-class recall, early stopping -- and a three-step model fails
+      # them for the right reason. They carry the `fulltrain` marker and are
+      # deselected here; the `trained` job below trains properly and runs them.
+      - name: Smoke train, so the trained-model tests are not skipped
+        working-directory: pytorch
+        run: |
+          python -m lstm_nlp.cli train --config configs/sentiment.yaml --max-steps 3
+          python -m lstm_nlp.cli train --config configs/textgen.yaml --max-steps 3
+
       - name: Test
         working-directory: pytorch
-        # -m "" overrides the default marker filter so the `slow` tests, which
-        # actually train, run in CI rather than being silently skipped.
-        run: pytest -v -m ""
+        # -m "not fulltrain" overrides the default filter, so the `slow` tests --
+        # which actually train -- run here rather than being silently deselected.
+        #
+        # The skip budget is the point of the -rs and the grep. Exactly two skips
+        # are by design: the API refuses to serve a run stamped with max_steps
+        # (the Phase 8 guard), so its two latency tests skip. Any third is a test
+        # that stopped running without anyone deciding it should -- which is the
+        # failure mode this whole job exists to end, and it would otherwise be
+        # invisible, because a skip is green.
+        run: |
+          set -o pipefail
+          pytest -v -rs -m "not fulltrain" 2>&1 | tee result.txt
+          skipped=$(grep -c '^SKIPPED' result.txt || true)
+          echo "skipped: $skipped (budget 2)"
+          test "$skipped" -le 2
 
       - name: CLI smoke
         working-directory: pytorch
         run: |
           python -m lstm_nlp.cli --help
           lstm-nlp --version
+
+  trained:
+    # The gap this closes, stated plainly in Memory.md Phase 5: "no headline
+    # number in this repository has ever been verified by CI." macro-F1,
+    # perplexity and the entropy curve that is the whole D2 demonstration rested
+    # on one laptop and a fixed seed. Defensible while written down; better
+    # checked.
+    #
+    # One Python, not the matrix: this trains for real (~3 min measured on the
+    # dev machine, 106s + 77s), and version compatibility is already covered by
+    # the matrix above running 442 of the 448 tests.
+    #
+    # What is asserted is the GATES -- macro-F1 >= 0.75, perplexity <= 400,
+    # entropy monotonic in temperature, negation direction over five pairs --
+    # never the published figures themselves. Seeded reproducibility is claimed
+    # on a CPU machine, and bit-identity across operating systems is a stronger
+    # claim than this project has ever measured. Asserting 0.8300 here would be
+    # inventing a guarantee (Rules.md A4).
+    name: trained-model gates
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install (CPU torch only)
+        working-directory: pytorch
+        run: |
+          pip install -r requirements.txt --extra-index-url https://download.pytorch.org/whl/cpu
+          pip install -e .
+
+      - name: Train both models
+        working-directory: pytorch
+        run: |
+          python -m lstm_nlp.cli train --config configs/sentiment.yaml
+          python -m lstm_nlp.cli train --config configs/textgen.yaml
+
+      - name: Whole suite, nothing skipped
+        working-directory: pytorch
+        # With real checkpoints there is no reason for any test to skip: data/ is
+        # committed, both models exist, and the API will serve them. Zero is the
+        # budget, and it is the only place in this workflow where zero is
+        # achievable -- which makes it the one job that proves the suite is as
+        # large as it claims to be.
+        run: |
+          set -o pipefail
+          pytest -v -rs -m "" 2>&1 | tee result.txt
+          skipped=$(grep -c '^SKIPPED' result.txt || true)
+          echo "skipped: $skipped (budget 0)"
+          test "$skipped" -eq 0
+
+      - name: Report the numbers this job just checked
+        working-directory: pytorch
+        run: |
+          python -m lstm_nlp.cli eval --ckpt "$(ls -d runs/sentiment/*/ | tail -1)best.pt" --split test
+          python -m lstm_nlp.cli eval --ckpt "$(ls -d runs/textgen/*/ | tail -1)best.pt"
 
   audit:
     name: project audit
@@ -82,7 +168,7 @@ jobs:
       # Blocking from Phase 9 (Rules.md section 9). The tree is clean, so the
       # next finding is new drift rather than accumulated debt.
       - run: ruff check pytorch/ --output-format=github
-      # Formatting stays advisory. `ruff format` would rewrite 31 hand-laid-out
+      # Formatting stays advisory. `ruff format` would rewrite 35 hand-laid-out
       # files -- aligned tables, deliberate line breaks in measured output --
       # for no correctness gain. Adopting a formatter is a decision to take on
       # purpose, not a side effect of turning lint on.

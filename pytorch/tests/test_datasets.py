@@ -285,11 +285,14 @@ def test_textgen_vocab_has_no_pad(mini_book: Path) -> None:
 
 @pytest.mark.realdata
 def test_sentiment_measured_values(sentiment_splits) -> None:
-    """Measured 2026-08-30 under the three-way split.
+    """Measured 2026-08-30 under the three-way split, after deduplication.
 
-    The test block is byte-identical to the two-way era -- same 3,463 rows, same
-    0.2047 positive rate -- because validation is carved out of train. That is
-    what keeps every number comparable across the change.
+    Validation is carved out of *train*, never out of test, so introducing it
+    moved no test row: the block holds the 3,382 rows deduplication left, at a
+    0.1952 positive rate. That is what keeps every number comparable across the
+    change. (This docstring described the pre-deduplication 3,463 / 0.2047 block
+    until 2026-08-30, while the assertions below already carried the corrected
+    values -- the test was right and its own prose was not.)
     """
     s = sentiment_splits
     assert (len(s.train), len(s.val), len(s.test)) == (6705, 1184, 3382)
@@ -323,7 +326,14 @@ def test_textgen_measured_values(textgen_splits) -> None:
 
 @pytest.mark.realdata
 def test_textgen_memory_footprint(textgen_splits) -> None:
-    """D9: 707 MB of one-hot becomes 0.22 MB of lazily-sliced indices."""
+    """D9: 667 MB of one-hot becomes 0.22 MB of lazily-sliced indices.
+
+    667 MB is what these windows would cost one-hot at V=2,436; the reference
+    actually allocated 931 MB at its own larger vocabulary. This said "707 MB"
+    until 2026-08-30 -- a hypothetical from the original plan, retired as a
+    stale figure in Phase 1 and still surviving here because the audit's
+    stale-figure gate read documents only.
+    """
     t = textgen_splits
     blocks = (t.train, t.val, t.test)
     storage = sum(b.storage_nbytes() for b in blocks)
@@ -349,8 +359,8 @@ def test_no_gutenberg_vocabulary_in_textgen(textgen_splits) -> None:
 def test_no_cleaned_text_appears_in_two_blocks(sample_csv: Path) -> None:
     """The property deduplication exists to guarantee.
 
-    Before this, 86 of 3,463 test rows (2.48%) shared their cleaned text with a
-    training row -- mostly stubs like "<user> thanks" -- so the model was partly
+    Previously, 86 of 3,463 test rows (2.48%) shared their cleaned text with
+    a training row -- mostly stubs like "<user> thanks" -- so the model was partly
     scored on inputs it had memorised.
     """
     s = prepare_sentiment_data(sample_csv, min_freq=1)

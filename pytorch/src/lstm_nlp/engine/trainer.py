@@ -53,11 +53,26 @@ class TrainingHistory:
         """Add one epoch's metrics."""
         self.epochs.append(record)
 
+    @property
+    def best_epoch_number(self) -> int | None:
+        """The best epoch as it is *numbered* in ``epochs``, or ``None``.
+
+        ``best_epoch`` is a zero-based index into ``epochs``; the ``epoch`` field
+        inside each record is one-based, and so is every log line and every
+        printed summary.  Persisting the raw index beside one-based records made
+        ``history.json`` contradict itself -- a run that restored epoch 9 wrote
+        ``"best_epoch": 8`` next to the record labelled ``"epoch": 9``.  Nothing
+        computed with it, so nothing broke; a reader of the artifact simply could
+        not tell which convention it was in.  Everything persisted is one-based
+        from 2026-08-30.
+        """
+        return None if self.best_epoch < 0 else self.best_epoch + 1
+
     def to_dict(self) -> dict:
         """JSON-safe payload for ``history.json``."""
         return {
             "epochs": self.epochs,
-            "best_epoch": self.best_epoch,
+            "best_epoch": self.best_epoch_number,
             "stopped_early": self.stopped_early,
             "total_seconds": round(self.total_seconds, 2),
             "n_epochs_run": len(self.epochs),

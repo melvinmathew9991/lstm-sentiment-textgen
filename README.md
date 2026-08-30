@@ -116,9 +116,27 @@ streamlit run frontend/app.py               # frontend → :8501
 ### Test
 
 ```bash
-pytest                       # full suite, < 60s, no network, no training
+pytest                       # fast path, < 60s, no network, no training
+pytest -m ""                 # everything, including the tests that train
 pytest -m "not realdata"     # skip tests that need data/
 ```
+
+**Train first, or 53 tests skip.** `runs/` is gitignored, so a fresh clone has no
+checkpoints and every test that loads a trained model — the negation aggregate,
+entropy monotonicity on real logits, the checkpoint round-trip against a real
+run, and the subprocess CLI tests — skips at runtime rather than failing.
+Measured on a clean tree: `pytest -m ""` gives **391 passed, 53 skipped**; after
+the two `train` commands above it gives **448 passed, 0 skipped**. A skip is
+green, so nothing local flags it.
+
+CI no longer has this problem. Every matrix leg smoke-trains (`--max-steps 3`,
+~20 s) so 442 of the 448 run on both Python versions, and a separate
+`trained-model gates` job trains both models properly and runs the whole suite
+with a **skip budget of zero**. The four tests a smoke model cannot satisfy —
+the macro-F1 gate, negation, minority-class recall, early stopping — carry the
+`fulltrain` marker and run only in that job. Until 2026-08-30 no headline number
+in this repository had ever been verified by CI; see `Memory.md`, Phase 5, for
+how long that was true and how it was found.
 
 ---
 
@@ -130,7 +148,14 @@ Populated as phases complete. Every figure is measured, and every metric is repo
 |---|---|---|
 | Sentiment accuracy | 0.8048 (majority class) | **0.8974**  (+0.0925) |
 | Sentiment macro-F1 | 0.4459 (majority class) | **0.8300**  (+0.3841) |
-| Text-gen perplexity | 2,436 (uniform over vocab) | **223.54**  (10.9x better) |
+| Text-gen perplexity | 2,436 (uniform over vocab) | **267.54**  (9.11x better) |
+
+All three are **held-out test** figures, scored once. The perplexity row read
+`223.54 (10.9x better)` until 2026-08-30 — the v0.4.0 validation figure under the
+old 90/10 split, superseded when v1.2.0 carved a test block out of the held-out
+slice. Validation perplexity on the current split is 186.27; the 44% gap between
+that and 267.54 is the selection effect, and publishing the selected number as
+the headline is the mistake this table exists to avoid.
 
 Note on the original's headline number: its 0.909 validation accuracy is **not** a target. It was produced by a model trained on negation-stripped text (D3), reported without a baseline it barely clears (D4), and saved at its worst epoch (D5). Reproducing it would not be evidence of anything. See [`PRD.md` §6.3](docs/PRD.md).
 

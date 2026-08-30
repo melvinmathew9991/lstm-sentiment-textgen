@@ -77,9 +77,47 @@ def test_batch_items_are_independent(model: SentimentLSTM) -> None:
 
 
 def test_parameter_count_matches_the_specification() -> None:
-    """Architecture.md section 3.1 states 355,010 at the real vocabulary."""
-    model = SentimentLSTM(vocab_size=4505, embed_dim=64, hidden_dim=64, num_layers=2)
-    assert model.num_parameters() == 355_010
+    """Architecture.md section 3.1 states 325,570 at the real vocabulary.
+
+    The vocabulary here must stay in step with the one the config actually
+    produces. Until 2026-08-30 this used a superseded vocabulary size
+    -- the count from before the validation split and before deduplication --
+    so it asserted the *sentence* in the document rather than the *artifact*,
+    and it would have passed unchanged however far the two drifted apart. They
+    drifted: the shipped model has held 325,570 parameters since v1.1.0 while
+    section 3.1 previously totalled 258,880 + 66,560 + 130 as 355,010 -- a
+    superseded count that contradicted its own line items.
+    ``test_real_vocabulary_produces_the_documented_parameter_count`` is the one
+    that pins the artifact; this one pins the arithmetic cheaply.
+    """
+    model = SentimentLSTM(vocab_size=4045, embed_dim=64, hidden_dim=64, num_layers=2)
+    assert model.num_parameters() == 325_570
+
+
+def test_parameter_count_is_the_sum_of_its_parts() -> None:
+    """A total that contradicts its own line items is the defect shape here.
+
+    Checked at an arbitrary vocabulary so it holds for any configuration, not
+    just the one in the document.
+    """
+    v, e, h, layers = 1_234, 64, 64, 2
+    model = SentimentLSTM(vocab_size=v, embed_dim=e, hidden_dim=h, num_layers=layers)
+    embedding = v * e
+    lstm = sum(4 * h * (inp + h) + 2 * 4 * h for inp in (e, h))
+    head = h * 2 + 2
+    assert model.num_parameters() == embedding + lstm + head
+
+
+@pytest.mark.realdata
+def test_real_vocabulary_produces_the_documented_parameter_count(
+    sentiment_splits,
+) -> None:
+    """Pin the artifact: the model built from the real split has 325,570 params."""
+    model = SentimentLSTM(
+        vocab_size=len(sentiment_splits.vocab), embed_dim=64, hidden_dim=64, num_layers=2
+    )
+    assert len(sentiment_splits.vocab) == 4_045
+    assert model.num_parameters() == 325_570
 
 
 def test_config_round_trips_through_the_constructor() -> None:

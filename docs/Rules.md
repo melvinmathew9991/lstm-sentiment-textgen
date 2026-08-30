@@ -85,6 +85,7 @@ Non-negotiable. Each is the structural fix for an audited defect — a test asse
 - **No mutable default arguments.**
 - **Randomness** flows from an explicit `torch.Generator` or a seed argument. Never call the global RNG inside a library function.
 - **Paths** are `pathlib.Path`, resolved relative to a config value or `__file__` — never relative to the CWD. The reference only runs if you happen to be standing in `modular_code/`.
+- **Address the backend as `127.0.0.1`, never `localhost`** — in documented commands, in examples, and in defaults. Uvicorn binds IPv4; on the Windows dev machine a `localhost` lookup tries `::1` first and costs **2,066 ms per new connection**, measured 2026-08-30 against **15.1 ms** for the literal address. A reader reproducing NFR-5's *"< 100 ms for `/predict`"* with a `localhost` curl measures ~2,000 ms and concludes the budget is blown by 20×. `frontend/settings.py` already gets this right; every `curl` in these documents did not, until 2026-08-30.
 - **Prefer** small pure functions. `data/preprocess.py` must be importable and testable without torch installed.
 
 ---
@@ -130,7 +131,7 @@ Custom exceptions live in `lstm_nlp/errors.py`, all subclassing `LstmNlpError`.
 - The split seed (`10`) is separate from the training seed (`42`) — kept from the reference for comparability.
 - Every run writes its **fully resolved** config to `runs/.../config.yaml`. Not the input file — the merged, defaulted, validated object.
 - Library versions are recorded in every checkpoint.
-- Same seed ⇒ identical test metrics (S10). If a change breaks this, it is a bug, not a nuisance.
+- Same seed ⇒ identical test metrics (S10) **on the same platform and the same dependency closure**. If a change breaks that, it is a bug, not a nuisance. Across platforms it is measured, not assumed: on 2026-08-30 the first Linux run of the training path reproduced text generation bit-for-bit (perplexity 267.54, cross-entropy 5.5893, top-1 0.1367) and did **not** reproduce sentiment (macro-F1 0.8300 → 0.8239), which diverges at epoch 1 and selects a different epoch. See `PARITY.md` §6.
 - Determinism is guaranteed on CPU only. GPU cuDNN LSTM kernels are non-deterministic; document it rather than fight it.
 
 ---

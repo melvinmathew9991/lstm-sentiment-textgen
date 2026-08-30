@@ -6,8 +6,13 @@ every threshold-0.5 metric is bit-identical before and after. That is what let
 this land without re-measuring a single figure in ``PARITY.md``, so it is
 asserted here rather than argued in a docstring.
 
-Measured on the shipped model: validation ECE 0.0558 -> 0.0313, and on the test
-block the fit never saw, 0.0609 -> 0.0324. Zero decisions changed.
+Measured on the shipped model: validation ECE 0.0668 -> 0.0198 at T = 2.6715,
+and on the test block the fit never saw, 0.0803 -> 0.0223. Zero of 3,382
+decisions changed.
+
+This docstring read 0.0558 -> 0.0313 and 0.0609 -> 0.0324 until 2026-08-30 --
+the v1.0.0 fit, superseded when deduplication changed the corpus and the
+temperature was refitted. Same numbers, same omission, as ``PARITY.md`` 6.
 """
 
 from __future__ import annotations

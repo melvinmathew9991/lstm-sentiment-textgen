@@ -200,8 +200,9 @@ def _drop_duplicate_texts(frame: pd.DataFrame) -> pd.DataFrame:
 def compute_class_weights(labels: list[int], num_classes: int = 2) -> torch.Tensor:
     """Inverse-frequency weights, normalised so the majority class weighs 1.0.
 
-    On this data that yields ``[1.0, 3.884]``.  Without it the model can score
-    0.795 accuracy by never predicting the minority class (D4).
+    On the deduplicated corpus that yields ``[1.0, 4.130]`` (``[1.0, 3.884]``
+    before deduplication).  Without it the model can score 0.8048 accuracy by
+    never predicting the minority class (D4).
     """
     counts = torch.bincount(torch.tensor(labels), minlength=num_classes).float()
     if (counts == 0).any():

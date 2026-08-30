@@ -183,8 +183,12 @@ def describe(payload: dict[str, Any]) -> str:
         f"  created         {payload.get('created_utc', '?')}",
         f"  preprocess ver  {payload['preprocess'].get('version')}",
     ]
-    if "best_epoch" in train:
-        lines.append(f"  best epoch      {train['best_epoch'] + 1}"
+    if train.get("best_epoch") is not None:
+        # One-based as persisted, matching ``history.json``'s ``epoch`` field and
+        # the trainer's log line. This added 1 until 2026-08-30, because the
+        # field held a zero-based index; the display was right and the artifact
+        # was the thing that disagreed with itself.
+        lines.append(f"  best epoch      {train['best_epoch']}"
                      f"{'  (stopped early)' if train.get('stopped_early') else ''}")
     if "macro_f1" in metrics:
         lines.append(

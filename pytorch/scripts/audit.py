@@ -47,23 +47,47 @@ class Result:
 # Computed from the real corpora and asserted by the test suite. Documentation
 # that disagrees with these is stale documentation (Rules.md A4).
 
+# Each entry is (literal as it appears in prose, what it is). The literal form
+# matters: these are matched against documents, which use thousands separators.
+#
+# Corrected 2026-08-30. Seven of these were pre-deduplication values -- 8,078 /
+# 3,463 / 4,505 / 5.23% / 3.38% / 3.884 / 0.7953 / 0.4430 -- and one predated
+# v1.2.0's third block (27,409 windows). That mattered more than it looks,
+# because `check_measured_values_documented` below **requires** these literals to
+# appear in the documents: the audit was actively holding the superseded
+# baselines in place while `STALE_FIGURES` was never told about them. Two checks
+# in this file pulling in opposite directions is why the correction from v1.1.0
+# stopped at `Memory.md` and never reached `PARITY.md`, `Architecture.md`,
+# `Phases.md`, the configs or the model docstrings.
 MEASURED = {
-    "sentiment_rows": 11_541,
-    "sentiment_train": 8_078,
-    "sentiment_test": 3_463,
-    "sentiment_vocab": 4_505,
-    "sentiment_test_oov": 0.0523,
-    "sentiment_train_oov": 0.0338,
-    "class_weight_pos": 3.884,
-    "baseline_accuracy": 0.7953,
-    "baseline_macro_f1": 0.4430,
-    "alice_chars_raw": 164_045,
-    "alice_chars_stripped": 144_607,
-    "alice_tokens": 27_429,
-    "textgen_vocab": 2_436,
-    "textgen_windows": 27_409,
-    "baseline_perplexity": 2_436,
+    "sentiment_rows_raw": ("11,541", "rows in the CSV"),
+    "sentiment_rows_kept": ("11,271", "rows after deduplication"),
+    "sentiment_train": ("6,705", "training block"),
+    "sentiment_val": ("1,184", "validation block"),
+    "sentiment_test": ("3,382", "held-out test block"),
+    "sentiment_raw_vocab": ("8,702", "train-only raw vocabulary"),
+    "sentiment_vocab": ("4,045", "sentiment vocab @ min_freq=2"),
+    "sentiment_params": ("325,570", "SentimentLSTM parameters at V=4,045"),
+    "sentiment_test_oov": ("5.77", "test OOV rate, %"),
+    "sentiment_train_oov": ("3.70", "train <unk> rate, %"),
+    "class_weight_pos": ("4.130", "positive class weight"),
+    "baseline_accuracy": ("0.8048", "majority-class accuracy baseline"),
+    "baseline_macro_f1": ("0.4459", "majority-class macro-F1 baseline"),
+    "alice_chars_raw": ("164,045", "alice.txt characters"),
+    "alice_chars_stripped": ("144,607", "characters after the Gutenberg strip"),
+    "alice_tokens": ("27,429", "alice tokens"),
+    "textgen_vocab": ("2,436", "textgen vocab / perplexity baseline"),
+    "textgen_windows": ("27,399", "windows across the three blocks"),
+    "textgen_params": ("1,333,124", "TextGenLSTM parameters at V=2,436"),
+    "calibration_temperature": ("2.6715", "fitted calibration temperature"),
 }
+
+# The subset a reader must be able to find in the documents. Derived from
+# MEASURED so there is one list of canonical numbers in this file, not two.
+HEADLINE_KEYS = (
+    "baseline_accuracy", "baseline_macro_f1", "textgen_vocab",
+    "sentiment_vocab", "class_weight_pos", "alice_tokens",
+)
 
 # Superseded figures. Any of these appearing in a doc outside an explicitly
 # historical note means a correction did not propagate.
@@ -77,7 +101,33 @@ STALE_FIGURES = {
     "0.9366": "sentiment ROC-AUC selected on the test split; held-out value is 0.9303",
     "0.8391": "sentiment macro-F1 inflated by duplicate rows; corrected value is 0.8300",
     "0.9303": "sentiment ROC-AUC inflated by duplicate rows; corrected value is 0.9126",
+    # --- added 2026-08-30: everything v1.1.0 and v1.2.0 moved but did not list.
+    # The direct metrics above were registered when they changed; the figures
+    # *derived* from the same corpus change were not, so they survived in eight
+    # places at once. Enumerating the dependents is the actual fix.
+    "0.7953": "accuracy baseline before deduplication; correct value is 0.8048",
+    "0.4430": "macro-F1 baseline before deduplication; correct value is 0.4459",
+    "3.884": "positive class weight before deduplication; correct value is 4.130",
+    "4,505": "sentiment vocab before deduplication; correct value is 4,045",
+    "9,566": "train-only raw vocab before deduplication; correct value is 8,702",
+    "355,010": "SentimentLSTM params at V=4,505; correct value is 325,570",
+    "328,002": "SentimentLSTM params at V=4,083; correct value is 325,570",
+    "5.23%": "test OOV before deduplication; correct value is 5.77%",
+    "3.38%": "train <unk> rate before deduplication; correct value is 3.70%",
+    "3,463": "test rows before deduplication; correct value is 3,382",
+    "8,078": "train rows under the two-way split; correct value is 6,705",
+    "1.5922": "calibration temperature before deduplication; correct value is 2.6715",
+    "0.0609": "test ECE before deduplication; correct value is 0.0803",
+    "0.0324": "calibrated test ECE before deduplication; correct value is 0.0223",
+    "27,409": "windows across two blocks; correct value is 27,399 across three",
+    "223.54": "textgen perplexity on the selection set; held-out value is 267.54",
 }
+
+# Files that are read as current fact and therefore held to STALE_FIGURES too.
+# Documents alone was not enough: the stale vocabulary and class weight lived in
+# `configs/sentiment.yaml`, in two model docstrings and in a test docstring,
+# none of which this gate could see before 2026-08-30.
+STALE_SCAN_GLOBS = ("configs/*.yaml", "src/**/*.py", "tests/**/*.py", "scripts/*.py")
 
 BANNED_IMPORTS = {
     "tensorflow": "the framework being replaced",
@@ -391,18 +441,74 @@ def check_docs_present() -> Result:
                   missing or [f"all {len(DOCS)} present"])
 
 
+def _before(lines: list[str], heading: str) -> tuple[int, int]:
+    """Line range from the top of the file to just above ``heading``."""
+    for i, line in enumerate(lines, 1):
+        if line.startswith(heading):
+            return (1, i - 1)
+    return (1, len(lines))
+
+
+def _between(lines: list[str], start: str, next_prefix: str) -> tuple[int, int]:
+    """Line range covering the ``start`` section, ending at the next ``next_prefix``."""
+    begin = None
+    for i, line in enumerate(lines, 1):
+        if begin is None:
+            if line.startswith(start):
+                begin = i
+            continue
+        if line.startswith(next_prefix):
+            return (begin, i - 1)
+    return (begin, len(lines)) if begin else (1, 0)
+
+
 def check_stale_figures() -> Result:
-    """A corrected number must not survive anywhere but an explicit history note."""
+    """A corrected number must not survive anywhere but an explicit history note.
+
+    Scope widened 2026-08-30 from the documents to the configs, the package, the
+    tests and this script. Every one of those carried a superseded figure stated
+    as current fact, and none of them was reachable by a gate that read only
+    ``DOCS``.
+    """
     markers = ("corrected", "earlier draft", "was computed", "not the", "(not ",
                "hypothetical", "superseded", "plan's", "surprises", "instead of",
-               "rather than", "previously", "old ")
+               "rather than", "previously", "old ", "before dedup",
+               "pre-deduplication", "un-deduplicated", "until 2026-", "it read",
+               "used to", "no longer", "stale", "history note", "was measured",
+               "before the validation split", "at the v=")
+    scanned: list[tuple[str, Path]] = [
+        (name, REPO_ROOT / name) for name in DOCS
+    ]
+    # Two documents are historical records by construction, so scanning them
+    # whole would demand that an append-only log rewrite its own past -- which
+    # is the one thing `Memory.md` exists not to do. Each is therefore scanned
+    # over its *live* region only, which is a sharpening rather than an
+    # exemption: before 2026-08-30 the whole of both files was nominally in
+    # scope and the stale at-a-glance table at the top of `Memory.md` passed
+    # anyway, because a neighbouring phase entry supplied a history marker.
+    live_regions = {
+        # Everything above the first phase entry: the "Project at a glance" and
+        # "Measured data facts" tables a reader is told to trust without
+        # recomputing (Rules.md A1, A4).
+        "docs/Memory.md": lambda lines: _before(lines, "## Phase 0"),
+        # Released sections are immutable; only Unreleased describes the present.
+        "CHANGELOG.md": lambda lines: _between(lines, "## [Unreleased]", "## ["),
+    }
+    for pattern in STALE_SCAN_GLOBS:
+        for path in sorted(PKG_ROOT.glob(pattern)):
+            if "__pycache__" in path.parts:
+                continue
+            scanned.append((str(path.relative_to(REPO_ROOT)).replace("\\", "/"), path))
+
     hits = []
-    for name in DOCS:
-        path = REPO_ROOT / name
+    for name, path in scanned:
         if not path.is_file():
             continue
         lines = path.read_text(encoding="utf-8").splitlines()
+        live = live_regions.get(name, lambda _lines: (1, len(_lines)))(lines)
         for i, line in enumerate(lines, 1):
+            if not live[0] <= i <= live[1]:
+                continue
             # A historical note is a paragraph, not a line: a multi-line bullet
             # can carry its "corrected" marker two lines above the figure.
             context = " ".join(lines[max(0, i - 3):i + 2]).lower()
@@ -412,8 +518,9 @@ def check_stale_figures() -> Result:
                 if fig in line:
                     hits.append(f"{name}:{i} '{fig}' -- {why}")
     status = FAIL if hits else PASS
-    return Result(status, "No stale measured figures in docs", "Rules.md A4",
-                  hits or [f"{len(STALE_FIGURES)} superseded figures appear only in history notes"])
+    return Result(status, "No stale measured figures", "Rules.md A4",
+                  hits or [f"{len(STALE_FIGURES)} superseded figures appear only in "
+                           f"history notes, across {len(scanned)} files"])
 
 
 def check_terminology() -> Result:
@@ -440,17 +547,14 @@ def check_terminology() -> Result:
 
 
 def check_measured_values_documented() -> Result:
-    """Every headline baseline must be findable in the docs."""
+    """Every headline baseline must be findable in the docs.
+
+    The required literals come from ``MEASURED``, so this check and
+    ``check_stale_figures`` can never again demand and forbid the same number.
+    """
     blob = "".join((REPO_ROOT / d).read_text(encoding="utf-8")
                    for d in DOCS if (REPO_ROOT / d).is_file())
-    required = {
-        "0.7953": "accuracy baseline",
-        "0.4430": "macro-F1 baseline",
-        "2,436": "perplexity baseline / textgen vocab",
-        "4,505": "sentiment vocab",
-        "3.884": "positive class weight",
-        "27,429": "alice tokens",
-    }
+    required = {MEASURED[k][0]: MEASURED[k][1] for k in HEADLINE_KEYS}
     missing = [f"{v} ({why})" for v, why in required.items() if v not in blob]
     status = FAIL if missing else PASS
     return Result(status, "Measured values documented", "Rules.md C11",
@@ -520,15 +624,38 @@ def check_no_weights_tracked() -> Result:
     return Result(status, "No model weights tracked", "Rules.md 10", bad or ["none"])
 
 
+#: Every path Rules.md B1 freezes. The solution PDF is named there and was not
+#: checked here until 2026-08-30, and neither was the working tree: a pending
+#: deletion of the PDF showed up only as a line inside the generic dirty-tree
+#: WARN, which is not the same as being told a protected artifact is going away.
+FROZEN_PATHS = ["modular_code", "notebook", "LSTM part 2 Solution doc.pdf"]
+
+
 def check_frozen_reference_untouched() -> Result:
-    """B1: modular_code/ and notebook/ must never change after the initial commit."""
-    proc = run(["git", "log", "--oneline", "--", "modular_code", "notebook"], cwd=REPO_ROOT)
+    """B1: the frozen reference must not change after the initial commit.
+
+    Two questions, not one: has history touched it, and is the working tree
+    about to? A staged or unstaged deletion is the more likely accident and was
+    the one this check could not see.
+    """
+    proc = run(["git", "log", "--oneline", "--", *FROZEN_PATHS], cwd=REPO_ROOT)
     commits = [ln for ln in proc.stdout.splitlines() if ln.strip()]
-    if len(commits) <= 1:
-        return Result(PASS, "Frozen reference untouched", "Rules.md B1",
-                      ["modular_code/ and notebook/ changed only in the initial commit"])
-    return Result(FAIL, "Frozen reference untouched", "Rules.md B1",
-                  [f"{len(commits)} commits touch the frozen reference:"] + commits[:5])
+
+    status = run(["git", "status", "--porcelain", "--", *FROZEN_PATHS], cwd=REPO_ROOT)
+    pending = [ln for ln in status.stdout.splitlines() if ln.strip()]
+
+    problems = []
+    if len(commits) > 1:
+        problems.append(f"{len(commits)} commits touch the frozen reference:")
+        problems.extend(commits[:5])
+    if pending:
+        problems.append("uncommitted changes to a B1-protected path:")
+        problems.extend(pending[:5])
+    if problems:
+        return Result(FAIL, "Frozen reference untouched", "Rules.md B1", problems)
+    return Result(PASS, "Frozen reference untouched", "Rules.md B1",
+                  [f"{len(FROZEN_PATHS)} protected paths: unchanged since the initial "
+                   "commit and clean in the working tree"])
 
 
 def check_tags_match_phases() -> Result:

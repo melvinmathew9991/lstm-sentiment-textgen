@@ -70,6 +70,7 @@ NEGATION_PAIRS = [
 ]
 
 
+@pytest.mark.fulltrain
 def test_negation_changes_the_prediction(trained) -> None:
     """Negation must move the model, measured over pairs rather than one phrase.
 
@@ -132,14 +133,16 @@ def test_negations_are_in_the_vocabulary(trained) -> None:
 # --------------------------------------------------------------------------- #
 
 
+@pytest.mark.fulltrain
 def test_meets_the_macro_f1_gate(trained) -> None:
-    """PRD S3: macro-F1 >= 0.75 against a 0.4430 baseline."""
+    """PRD S3: macro-F1 >= 0.75 against a 0.4459 baseline."""
     _, payload = trained
     metrics = payload["metrics"]
     assert metrics["macro_f1"] >= 0.75, f"macro-F1 {metrics['macro_f1']:.4f} below the 0.75 gate"
     assert metrics["macro_f1"] > metrics["baseline_macro_f1"] + 0.30
 
 
+@pytest.mark.fulltrain
 def test_detects_the_minority_class(trained) -> None:
     """What class weighting bought. A baseline model scores 0 recall here."""
     _, payload = trained
