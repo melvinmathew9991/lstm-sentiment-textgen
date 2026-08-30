@@ -7,8 +7,50 @@ Defect IDs (D1-D11) refer to `PRD.md` section 1.1.
 
 ## [Unreleased]
 
-### Planned
-- Phase 9: hardening
+Nothing planned. The phase plan is complete.
+
+## [1.0.0] - 2026-08-30 - Phase 9: Hardening
+
+### Added
+- **Temperature scaling** (`engine/calibration.py`), fitted on the validation
+  block at training time and stored in the checkpoint. Measured on the shipped
+  model: **T = 1.5922**, validation ECE 0.0558 -> 0.0313, and on the test block
+  the fit never saw, **0.0609 -> 0.0324**.
+
+  The property that made this safe to ship is asserted, not argued: scaling
+  logits by a positive scalar is monotonic, so `argmax` cannot move. Verified
+  on the real model -- macro-F1 and accuracy bit-identical, **0 of 3,463
+  decisions changed** -- which is why no figure in `PARITY.md` needed
+  re-measuring.
+- `PredictResponse.calibrated` and a matching line in the UI. A score presented
+  as a probability is precisely the failure this project exists to remove, so
+  the caller is told which one it is holding.
+- **S10 reproducibility gate** (`tests/test_reproducibility.py`): two full
+  seeded training runs must produce identical metrics, identical confusion
+  matrices and an identical fitted temperature. Every measured claim in this
+  repository rests on this holding, and until now nothing checked it.
+- 23 tests (**435 total**).
+
+### Changed
+- **`ruff check` is blocking in CI.** The eight outstanding findings are fixed,
+  so the next one is new drift rather than accumulated debt. `ruff format`
+  stays advisory: it would rewrite 31 hand-laid-out files -- aligned tables,
+  deliberate breaks in measured output -- for no correctness gain, and adopting
+  a formatter is a decision to take deliberately rather than as a side effect.
+- **The audit's defect-coverage check now matches test function names, not file
+  text.** It previously searched the concatenated source of every test file, so
+  D4, D8 and D10 were "covered" by words appearing in prose; D10's intended
+  needle, `magic`, matched nothing at all. Every needle is now a real test name,
+  and the check was verified to **fail** when the D10 test is removed -- which
+  the old form could not do.
+
+### Still not fixed, still recorded
+- Middle-range over-confidence survives temperature scaling (see `PARITY.md`
+  section 6). Fixing it needs a per-bin method and more held-out data than 1,212
+  rows justifies.
+- 2.48% duplicate rows across the split, and no held-out block for text-gen.
+  Both would move published figures, and both are described where a reader will
+  meet them rather than fixed quietly.
 
 ## [0.9.0] - 2026-08-30 - Phase 8: Parity & reporting
 

@@ -69,18 +69,12 @@ class ClassificationReport:
         """Render as a text block. Every metric sits beside its baseline."""
         lines = [
             "                    value    baseline      lift",
-            "  accuracy        {:7.4f}    {:7.4f}   {:+7.4f}".format(
-                self.accuracy, self.baseline_accuracy, self.accuracy_lift
-            ),
-            "  macro-F1        {:7.4f}    {:7.4f}   {:+7.4f}".format(
-                self.macro_f1, self.baseline_macro_f1, self.macro_f1_lift
-            ),
+            f"  accuracy        {self.accuracy:7.4f}    {self.baseline_accuracy:7.4f}   {self.accuracy_lift:+7.4f}",
+            f"  macro-F1        {self.macro_f1:7.4f}    {self.baseline_macro_f1:7.4f}   {self.macro_f1_lift:+7.4f}",
         ]
         if self.roc_auc is not None:
             lines.append(
-                "  ROC-AUC         {:7.4f}    {:7.4f}   {:+7.4f}".format(
-                    self.roc_auc, 0.5, self.roc_auc - 0.5
-                )
+                f"  ROC-AUC         {self.roc_auc:7.4f}    {0.5:7.4f}   {self.roc_auc - 0.5:+7.4f}"
             )
         lines.append("")
         lines.append("  per class        prec     recall        F1    support")

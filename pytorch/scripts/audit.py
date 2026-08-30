@@ -95,17 +95,26 @@ BANNED_IMPORTS = {
 }
 
 # Defect -> substring that must appear in at least one test name.
+# Needles are matched against test FUNCTION NAMES, never against file text.
+#
+# Until Phase 9 this matched the concatenated source of every test file, which
+# made the check close to vacuous: "config", "checkpoint" and "baseline" appear
+# in prose everywhere, so D4, D8 and D10 were "covered" by words in docstrings.
+# D10's intended needle, "magic", matched nothing at all -- its whole verdict
+# rested on "config" occurring somewhere across 11 files.
+#
+# Each needle below was verified to appear in a real test function name.
 DEFECT_TESTS = {
-    "D1": ["signature", "binds_a_handler", "required_arguments"],
-    "D2": ["entropy", "temperature", "argmax"],
-    "D3": ["negation", "polarity"],
-    "D4": ["baseline"],
-    "D5": ["best_not_last", "early_stop"],
+    "D1": ["call_matches_its_signature", "checker_detects_the_reference_defect"],
+    "D2": ["entropy_rises_with_temperature", "entropy_increases", "argmax"],
+    "D3": ["negations_survive_cleaning", "negation_changes_the_prediction"],
+    "D4": ["equals_the_baseline", "majority_baseline"],
+    "D5": ["best_not_last"],
     "D6": ["gutenberg", "boilerplate"],
-    "D7": ["train_only", "unknown_word", "unk"],
-    "D8": ["self_contained", "checkpoint"],
-    "D9": ["onehot", "storage_is_o_tokens"],
-    "D10": ["magic", "config"],
+    "D7": ["vocab_built_from_train_only", "unknown_words_do_not_raise"],
+    "D8": ["carries_the_vocabulary", "self_contained"],
+    "D9": ["int_indices_not_onehot", "storage_is_o_tokens"],
+    "D10": ["falls_back_to_config_defaults"],
     "D11": [],  # terminology -- enforced by the stale-phrase check instead
 }
 
@@ -171,8 +180,21 @@ def check_test_suite(fast: bool) -> Result:
     return Result(PASS, "Test suite", "Rules.md 6", detail)
 
 
+def test_function_names() -> str:
+    """Every ``def test_*`` name in the suite, lowercased and newline-joined.
+
+    Function names rather than file text: a defect is covered by a test that
+    exists, not by its identifier appearing in someone's docstring.
+    """
+    found = []
+    for path in py_files(TESTS):
+        found += re.findall(r"^\s*(?:async )?def (test_\w+)",
+                            path.read_text(encoding="utf-8"), re.M)
+    return "\n".join(found).lower()
+
+
 def check_defect_coverage() -> Result:
-    names = "\n".join(p.read_text(encoding="utf-8") for p in py_files(TESTS)).lower()
+    names = test_function_names()
     phase = current_phase()
     missing, covered, pending = [], [], []
     for defect, needles in DEFECT_TESTS.items():

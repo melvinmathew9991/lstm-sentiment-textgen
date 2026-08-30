@@ -369,8 +369,13 @@ Returns each loaded checkpoint's `task`, `model_cfg`, `vocab_size`, `metrics`, `
  "probabilities": {"negative": 0.87, "positive": 0.13},
  "n_tokens": 5,
  "n_unk": 0,
- "unk_rate": 0.0}
+ "unk_rate": 0.0,
+ "calibrated": true}
 ```
+
+`calibrated` says whether a validation-fitted temperature was applied. `false`
+means the number is a score rather than a calibrated probability, and a caller
+that cannot tell those apart will present one as the other.
 `n_unk`/`unk_rate` are returned deliberately — a caller must be able to see when a prediction rests on mostly-unknown tokens.
 
 ### `POST /predict/batch`

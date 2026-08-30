@@ -196,9 +196,13 @@ def test_trainer_contains_no_task_specific_code() -> None:
     for node in ast.walk(tree):
         if isinstance(node, ast.Module | ast.ClassDef | ast.FunctionDef | ast.AsyncFunctionDef):
             body = node.body
-            if body and isinstance(body[0], ast.Expr) and isinstance(body[0].value, ast.Constant):
-                if isinstance(body[0].value.value, str):
-                    node.body = body[1:] or [ast.Pass()]
+            if (
+                body
+                and isinstance(body[0], ast.Expr)
+                and isinstance(body[0].value, ast.Constant)
+                and isinstance(body[0].value.value, str)
+            ):
+                node.body = body[1:] or [ast.Pass()]
 
     code = ast.unparse(tree).lower()
     for word in ("sentiment", "textgen", "vocab", "tweet", "perplexity", "macro_f1"):

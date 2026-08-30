@@ -1148,7 +1148,115 @@ audits claims would be its own small joke.
 ### Audit
 **21 pass · 2 warn · 0 fail · 0 skip.** 412 tests.
 
-### Next: Phase 9 — Hardening (optional)
+---
+
+## Phase 9 — Hardening ✅ complete (2026-08-30)
+
+Four items, chosen from the `Phases.md` candidate list and the limitations
+`PARITY.md` §6 had just published. The phase plan is now complete.
+
+### Calibration — the one that mattered
+
+The Phase 8 review measured ECE 0.066 and I filed it as "recorded, not fixed".
+It was fixable, and the reason it was worth doing is a property rather than a
+number: **temperature scaling is monotonic, so it cannot change a decision.**
+
+That single fact is what made it shippable at this stage. Every figure in
+`PARITY.md` had just been published; a calibration method that moved macro-F1
+would have invalidated the document a day after writing it. Temperature scaling
+provably cannot, and I verified the claim on the real model rather than trusting
+the algebra:
+
+```
+                        before      after
+  validation ECE        0.0558     0.0313      T = 1.5922, fitted here
+  test ECE              0.0609     0.0324      the fit never saw this block
+  macro-F1            0.839058   0.839058      bit-identical
+  accuracy            0.892579   0.892579      bit-identical
+  decisions changed                     0      of 3,463
+```
+
+The test-set improvement (47%) is close to the validation one (44%), which is
+what says the single scalar generalised rather than fitted noise.
+
+**Improved, not solved,** and `PARITY.md` says so with the table: the middle
+bins are still over-confident by 0.11-0.21. One global scalar cannot fix
+bin-specific miscalibration and 1,212 validation rows do not justify a per-bin
+method. Recording the residual matters more than the headline reduction.
+
+### Decisions
+1. **Temperature scaling over Platt or isotonic.** One parameter on 1,212 rows
+   cannot meaningfully overfit; isotonic on that much data could. And only the
+   monotonic method leaves every published metric untouched.
+2. **Fitted on validation, never on test.** Fitting on test would have
+   recreated the Phase 8 defect *inside the module written to fix a related
+   one*, which is the kind of irony that ships.
+3. **A deterministic scan, not a gradient optimiser.** The objective is smooth
+   and one-dimensional, so a scan finds the same optimum without a learning
+   rate, an iteration count and an RNG — three things that would each have to
+   be pinned for the fit to reproduce. `test_the_fitted_temperature_is_
+   reproducible` then holds for free.
+4. **The API returns `calibrated`.** A caller cannot infer whether a number is a
+   probability or a score, and a checkpoint from before this phase carries no
+   temperature. The UI prints which. Silently changing what "0.751" means, with
+   no way to tell, would be the same defect wearing better clothes.
+
+### S10 — the gate everything else rests on
+
+Two full seeded runs must produce identical metrics, confusion matrices and
+fitted temperature. `PARITY.md` claims its figures reproduce; until this test
+existed that was an assertion about the code rather than a fact about it. It
+carries the control that a *different* seed gives a different split, so it
+cannot pass by the splitter ignoring seeds entirely.
+
+### The audit check I criticised, now fixed
+
+Phase 8 recorded that the defect-coverage check substring-matched the
+concatenated text of every test file — so D4, D8 and D10 were "covered" by words
+in docstrings, and D10's intended needle `magic` matched nothing at all. It now
+matches **test function names**, every needle was verified against a real one,
+and the check was confirmed to **FAIL** when the D10 test is removed:
+
+```
+D10 -- expected a test matching ['falls_back_to_config_defaults']
+```
+
+The old form could not fail. Criticising a check in a report and then leaving it
+alone would have been the cheaper half of the job.
+
+### `ruff` is blocking
+Eight findings fixed, `ruff check` now fails the build. `ruff format` stays
+advisory on purpose: it would rewrite 31 files whose layout is deliberate —
+aligned tables, measured output kept in columns — for no correctness gain.
+Turning on a formatter is a decision to take on its own merits, not something to
+smuggle in under "hardening".
+
+### Surprises / corrections
+- **Escaping cost me three broken edits.** Writing Python that writes Python
+  through a heredoc turned `"\n"` into a real newline and produced a file with
+  an unterminated string. Switched to line-based editing for anything containing
+  a backslash. Not interesting technically; worth recording because it happened
+  three times before I changed approach.
+- **The API contract test caught the response-shape change immediately**, which
+  is exactly what a contract test is for. Adding `calibrated` to
+  `PredictResponse` failed `test_predict_returns_the_documented_shape` on the
+  first run.
+
+### Not done, deliberately
+- **Deduplicating before the split** (2.48% of test rows) and **a held-out block
+  for text-gen**. Both move published figures, both were described in
+  `PARITY.md` §6 before this phase and remain there. Doing either quietly during
+  "hardening" would bury a metrics change inside a cleanup commit.
+- `mypy`, Docker, the `min_freq` sweep and a bidirectional variant. Real work,
+  none of it correctness, and the phase plan is complete without them.
+
+### Audit
+435 tests. 21 pass · 0 fail · 0 skip.
+
+### The project is done
+Ten phases, eleven reference defects closed, two of our own found and fixed by
+the review in §0.8.1, and five limitations published rather than buried.
+Tag `v1.0.0`.
 The list is already written, in `PARITY.md` §6: calibrate the probabilities on
 the validation block that now exists, deduplicate before splitting, give
 text-gen a held-out block (accepting that it moves the 2,436 / 7.7981-nat
