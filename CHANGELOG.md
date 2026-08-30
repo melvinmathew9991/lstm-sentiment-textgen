@@ -43,7 +43,7 @@ while one aimed at its shape catches the next one too.
   reproducibility across separate invocations.
 - `slow` and `realdata` pytest markers declared in `pyproject.toml`. The
   default run excludes `slow` to hold the 60-second budget (NFR-6); CI runs
-  `pytest -m ""` so the training tests are not skipped there.
+  `pytest -m ""` so no test is *deselected* by the marker filter there.
 - 33 tests (**306 total**; 301 on the default fast path).
 
 ### Fixed
@@ -54,8 +54,21 @@ while one aimed at its shape catches the next one too.
   traceback, and a final `except Exception` logs the traceback for diagnosis
   but still returns through the documented code, so no path dumps a raw trace
   at the user.
-- The `slow` marker introduced here would have made CI's `pytest -v` skip
+- The `slow` marker introduced here would have made CI's `pytest -v` deselect
   every test that trains, silently. CI now runs `pytest -v -m ""`.
+
+### Known gap
+- CI reports **255 passed, 51 skipped** (run 33286431087). `pytorch/runs/` is
+  gitignored, so every test needing a trained checkpoint skips there:
+  `test_predictor.py` (21), `test_trained_sentiment.py` (11),
+  `test_trained_textgen.py` (10) and 9 of `test_cli_integration.py`. **No
+  headline figure in this changelog -- macro-F1 0.8485, perplexity 223.54, the
+  D2 entropy curve -- has ever been verified by CI.** They are reproducible
+  from a fixed seed on a machine that has trained the models, and that is all
+  they currently claim. The D1 checker itself does run in CI (7 passed), as
+  does every test that needs no checkpoint. Closing the gap means a
+  `--max-steps` smoke train in CI producing a throwaway checkpoint; deferred
+  to Phase 9 rather than left implied.
 
 ### Verified
 All four subcommands run clean from `C:\Users` -- a different drive from the
