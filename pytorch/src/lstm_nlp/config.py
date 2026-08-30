@@ -88,7 +88,11 @@ class TextGenDataConfig(_Base):
     text: Path
     seq_len: int = Field(10, ge=1)
     stride: int = Field(1, ge=1)
-    val_fraction: float = Field(0.10, gt=0, lt=1)
+    val_fraction: float = Field(0.05, gt=0, lt=1)
+    #: Trailing block scored once, carved out of what was already held out so
+    #: the training block -- and therefore the vocabulary and the uniform
+    #: baseline -- does not move.
+    test_fraction: float = Field(0.05, ge=0, lt=1)
     min_freq: int = Field(2, ge=1)
     strip_gutenberg: bool = True  # fixes D6; switchable only for testing
 

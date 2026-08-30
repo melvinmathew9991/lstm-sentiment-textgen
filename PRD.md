@@ -179,7 +179,7 @@ The rebuild is done when all of these hold. Numbers below are **measured propert
 | S1 | `python -m lstm_nlp.cli train --config configs/sentiment.yaml` runs to completion and writes a loadable checkpoint. |
 | S2 | `... train --config configs/textgen.yaml` likewise. Neither path crashes — **D1** closed. |
 | S3 | Sentiment test **macro-F1 ≥ 0.75**, against a majority-class baseline of **0.443**. (Accuracy alone is not sufficient evidence; the baseline is 0.795.) |
-| S4 | Text-gen validation **perplexity ≤ 400**, against a uniform-guess baseline of **2,436** (= vocabulary size at the chosen `min_freq=1`; ln V = 7.798). |
+| S4 | Text-gen **held-out test perplexity ≤ 400** (*amended 2026-08-30: was validation perplexity; a test block now exists*), against a uniform-guess baseline of **2,436** (= vocabulary size at the chosen `min_freq=1`; ln V = 7.798). |
 | S5 | Temperature property test passes: entropy of the sampled next-word distribution increases monotonically across T ∈ {0.2, 0.5, 1.0, 1.5, 2.0}, and T=0.01 matches greedy argmax on ≥ 99% of draws. **D2** closed. |
 | S6 | A checkpoint saved by process A loads in a fresh process B with no other artifact present and reproduces its recorded test metrics to within 1e-6. **D8** closed. |
 | S7 | `predict` on a string containing a word absent from training returns a prediction rather than raising. **D7** closed. |

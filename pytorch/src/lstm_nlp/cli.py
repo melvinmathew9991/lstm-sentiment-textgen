@@ -84,15 +84,19 @@ def cmd_eval(args: argparse.Namespace) -> int:
             seq_len=cfg.data.seq_len,
             stride=cfg.data.stride,
             val_fraction=cfg.data.val_fraction,
+            test_fraction=cfg.data.test_fraction,
             min_freq=cfg.data.min_freq,
             strip_boilerplate=cfg.data.strip_gutenberg,
         )
         model = build_model(payload)
         device = resolve_device(cfg.device)
         model.to(device)
-        _, val_loader = build_textgen_loaders(splits, cfg.train.batch_size, cfg.seed)
-        metrics = evaluate_textgen(model, val_loader, device, len(splits.vocab))
-        print("Validation metrics\n" + format_textgen_metrics(metrics))
+        _, val_loader, test_loader = build_textgen_loaders(
+            splits, cfg.train.batch_size, cfg.seed
+        )
+        loader = val_loader if args.split == "val" else test_loader
+        metrics = evaluate_textgen(model, loader, device, len(splits.vocab))
+        print(f"Metrics on the {args.split} split\n" + format_textgen_metrics(metrics))
         return EXIT_OK
 
     splits = prepare_sentiment_data(

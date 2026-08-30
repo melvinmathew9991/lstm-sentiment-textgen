@@ -93,7 +93,7 @@ cd pytorch && pip install -e . && python -m lstm_nlp.cli --help && pytest -q
 | Alice raw → stripped | 164,045 → 144,607 chars (88.2% kept) |
 | Alice tokens | **27,429** (was 30,674 unstripped) |
 | Alice vocab, **train-only** @ `min_freq=1` | **2,436** (incl. `<unk>`) |
-| Windows, two blocks @ seq_len 10 | **27,409** (= 27,429 − 2×seq_len) |
+| Windows, three blocks @ seq_len 10 | **27,399** (= 27,429 − 3×seq_len) |
 | Storage (lazy int64) | **0.22 MB** · dense `(N,10)` would be 2.19 MB |
 | Sentiment train `<unk>` rate | **3.38%** — must be > 0 so `<unk>` gets trained |
 
@@ -363,5 +363,6 @@ Candidates, in rough value order:
 | P8 Parity | ✅ **done** 2026-08-30 | D11 | `PARITY.md` · 11/11 closed · 412 tests |
 | P9 Hardening | ✅ **done** 2026-08-30 | — | calibration · S10 gate · lint blocking · 435 tests |
 | v1.1.0 Dedup | ✅ **done** 2026-08-30 | — | 0 leaked test rows · macro-F1 0.8300 vs 0.4459 · 440 tests |
+| v1.2.0 Text-gen held-out | ✅ **done** 2026-08-30 | — | test perplexity 267.54 vs 2,436 · baseline unmoved · 444 tests |
 
 **`Memory.md`** is created at the end of P0 (its task 10) and appended to at the end of every phase thereafter (`Rules.md` A3).

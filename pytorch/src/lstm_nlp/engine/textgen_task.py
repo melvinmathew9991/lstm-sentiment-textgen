@@ -87,7 +87,10 @@ def build_loaders(
     val_loader = DataLoader(
         splits.val, batch_size=batch_size, shuffle=False, num_workers=num_workers,
     )
-    return train_loader, val_loader
+    test_loader = DataLoader(
+        splits.test, batch_size=batch_size, shuffle=False, num_workers=num_workers,
+    )
+    return train_loader, val_loader, test_loader
 
 
 def evaluate_textgen(
@@ -151,6 +154,7 @@ def train_textgen(cfg: TextGenConfig, max_steps: int | None = None) -> Path:
         seq_len=cfg.data.seq_len,
         stride=cfg.data.stride,
         val_fraction=cfg.data.val_fraction,
+        test_fraction=cfg.data.test_fraction,
         min_freq=cfg.data.min_freq,
         strip_boilerplate=cfg.data.strip_gutenberg,
     )
@@ -183,7 +187,7 @@ def train_textgen(cfg: TextGenConfig, max_steps: int | None = None) -> Path:
     )
 
     criterion = nn.CrossEntropyLoss()
-    train_loader, val_loader = build_loaders(
+    train_loader, val_loader, test_loader = build_loaders(
         splits, cfg.train.batch_size, cfg.seed, cfg.train.num_workers
     )
 
@@ -204,8 +208,13 @@ def train_textgen(cfg: TextGenConfig, max_steps: int | None = None) -> Path:
 
     history: TrainingHistory = trainer.fit(train_loader, val_loader, cfg.train.epochs)
 
-    metrics = evaluate_textgen(model, val_loader, device, vocab_size)
-    print("\nValidation metrics\n" + format_textgen_metrics(metrics) + "\n")
+    # Selection saw `val`; `test` is scored once, at the end.
+    val_metrics = evaluate_textgen(model, val_loader, device, vocab_size)
+    metrics = evaluate_textgen(model, test_loader, device, vocab_size)
+    print("\nValidation metrics (early stopping selected on these)\n"
+          + format_textgen_metrics(val_metrics) + "\n")
+    print("Test metrics (held out; scored once)\n"
+          + format_textgen_metrics(metrics) + "\n")
 
     run_dir = Path(cfg.output.dir) / datetime.now().strftime("%Y%m%dT%H%M%S")
     run_dir.mkdir(parents=True, exist_ok=True)

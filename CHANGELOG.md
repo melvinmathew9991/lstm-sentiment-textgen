@@ -7,9 +7,52 @@ Defect IDs (D1-D11) refer to `PRD.md` section 1.1.
 
 ## [Unreleased]
 
-Nothing planned. One item from `PARITY.md` section 6 remains open by choice: a
-held-out block for text generation, which would move the 2,436 / 7.7981-nat
-uniform baseline the D2 demonstration is quoted against.
+Nothing planned. Every limitation `PARITY.md` section 6 opened with is now
+either fixed or recorded with the reason it stands.
+
+## [1.2.0] - 2026-08-30 - A held-out block for text generation
+
+The last open item from `PARITY.md` section 6, and the one I had priced wrong.
+
+### Fixed
+- **Text generation had no held-out test block.** Perplexity was measured on the
+  same split early stopping selected against -- the defect fixed for sentiment
+  in 0.8.1, still live on the other task. `PRD.md` S4 asked for "validation
+  perplexity", so the label was honest, but an honest label on a selected
+  number is still a selected number.
+
+        validation  186.27     the block early stopping saw
+        test        267.54     held out, scored once
+                    +44%       the selection effect, now visible
+
+  267.54 still clears the S4 gate of <= 400 against the same 2,436 floor.
+
+### The reason it turned out cheap
+
+I had recorded this as expensive because a third block would rebuild the
+vocabulary and move the 2,436 / 7.7981-nat uniform baseline that the entire D2
+demonstration is quoted against. That assumed the block had to come out of
+**train**. It does not.
+
+        scheme        train    val   test   vocab    ln V
+        90/10 (old)  24,687  2,742      0   2,436  7.7981
+        80/10/10     21,945  2,742  2,742   2,288  7.7354   <- moves it
+        90/5/5       24,687  1,371  1,371   2,436  7.7981   <- identical
+
+At 90/5/5 the test block is carved out of what was *already* held out, so the
+training block is byte-identical to the old one and the vocabulary, `ln V` and
+every entropy figure in `PARITY.md` section 3 are untouched. Measuring the three
+schemes before writing any code turned a change I had described as invalidating
+the project's centrepiece into one that touches a single number.
+
+### Changed
+- `split_tokens` returns three contiguous blocks; `test_fraction` defaults to
+  0.05 and `val_fraction` drops from 0.10 to 0.05, so the held-out region is the
+  same size it always was, now divided in two.
+- `lstm-nlp eval --split val|test` selects a real block for text generation too.
+- Windows total 27,399 (three blocks each lose `seq_len`), from 27,409.
+- 4 tests (**444 total**), including the control that the 90/5/5 training block
+  is identical to the 90/10 one -- the property the whole design rests on.
 
 ## [1.1.0] - 2026-08-30 - Deduplicate before splitting
 

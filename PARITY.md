@@ -86,9 +86,9 @@ scores 0.8048.
 
 | | Reference (recorded) | This rebuild (measured) | Baseline |
 |---|---|---|---|
-| Validation perplexity | not reported | **223.54** | 2,436 (uniform over V) |
-| Cross-entropy | not reported | **5.4096** nats | 7.7981 (= ln 2,436) |
-| Top-1 next-word accuracy | not reported | **0.1482** | 0.0004 (= 1/V) |
+| Test perplexity | not reported | **267.54** *(held out)* | 2,436 (uniform over V) |
+| Cross-entropy | not reported | **5.5893** nats | 7.7981 (= ln 2,436) |
+| Top-1 next-word accuracy | not reported | **0.1367** | 0.0004 (= 1/V) |
 | Input tensor | one-hot, 931 MB | int64 indices, **0.22 MB** | — |
 | Temperature behaviour | uniform at every T (D2) | entropy 1.03 → 7.76 across T | — |
 
@@ -96,9 +96,16 @@ scores 0.8048.
 lstm-nlp eval --ckpt pytorch/runs/textgen/<run>/best.pt
 ```
 
-Perplexity 223.54 against a uniform baseline of 2,436 is a **10.90× reduction**.
+Perplexity 267.54 against a uniform baseline of 2,436 is a **9.11× reduction**.
 The reference reported no perplexity at all, so there is nothing to compare
 against except the floor.
+
+This is the **held-out** figure. Validation perplexity — the block early
+stopping selected on — is 186.27, and the 44% gap between the two is the
+selection effect that `PARITY.md` §6 previously listed as an open limitation.
+Closed in v1.2.0 by carving a test block out of the already-held-out slice
+rather than out of train, which is why the vocabulary is still 2,436 and the
+uniform baseline still 7.7981 nats: every entropy figure in §3 is unaffected.
 
 ---
 
@@ -225,12 +232,13 @@ Recorded because a report that lists only what went well is marketing.
   macro-F1 0.8391 → 0.8300 and ROC-AUC 0.9303 → 0.9126, because the model was
   previously rewarded for memorising `"<user> thanks"`. The majority-class
   baseline moved too, 0.7953 → 0.8048, since the duplicates skewed positive.
-- **Text generation has no held-out test block.** Its perplexity is measured on
-  the same split early stopping used. `PRD.md` S4 asks for "validation
-  perplexity", so the label is honest, but the selection effect is the one fixed
-  for sentiment in §5. Deliberately left: a third block rebuilds the text-gen
-  vocabulary and moves the 2,436 / 7.7981-nat baseline this entire document
-  quotes against.
+- ~~Text generation has no held-out test block.~~ **Fixed in v1.2.0.** The
+  block is carved out of the already-held-out slice at 90/5/5, not out of train,
+  so the training block is byte-identical to before and the vocabulary, `ln V`
+  and every entropy figure in §3 are unchanged. It cost what the selection
+  effect was worth: perplexity 223.54 on the selection set becomes **267.54**
+  held out, against the same 2,436 floor. My earlier note here assumed the block
+  had to come out of train, which is what made it look expensive.
 - **Negation does not always cross the decision boundary.** `"the flight was not
   great"` moves 0.984 → 0.900 without flipping, because the corpus is 79.5%
   complaints and *"great"* is a very strong positive marker. Other pairs cross
