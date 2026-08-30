@@ -359,7 +359,7 @@ Candidates, in rough value order:
 | P5 CLI | ✅ **done** 2026-08-30 | **D1**, D10 | 4 commands from `C:\Users` · 306 tests |
 | P6 FastAPI backend | ✅ **done** 2026-08-30 | — | 6 routes + 422/503 · /predict 2.3 ms · /generate 57 ms · 355 tests |
 | P7 Streamlit frontend | ✅ **done** 2026-08-30 | — | S17 · S18 · S19 · slider 260 ms · audit 0 skip · 407 tests |
-| P8 Parity | ⬜ | D11 | `PARITY.md`, 11/11 closed |
+| P8 Parity | ✅ **done** 2026-08-30 | D11 | `PARITY.md` · 11/11 closed · 412 tests |
 | P9 Hardening | ⬜ optional | — | — |
 
 **`Memory.md`** is created at the end of P0 (its task 10) and appended to at the end of every phase thereafter (`Rules.md` A3).
