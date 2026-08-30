@@ -28,10 +28,10 @@ Every figure in the "reference" column below is therefore what the reference
 
 | | Reference (recorded) | This rebuild (measured) | Baseline |
 |---|---|---|---|
-| Accuracy | 0.909 *(validation)* | **0.8926** *(held-out test)* | 0.7953 majority class |
-| Macro-F1 | not reported | **0.8391** | 0.4430 |
-| ROC-AUC | not reported | **0.9303** | 0.5000 |
-| Positive-class F1 | not reported | **0.7462** | 0.0000 |
+| Accuracy | 0.909 *(validation)* | **0.8974** *(held-out test)* | 0.8048 majority class |
+| Macro-F1 | not reported | **0.8300** | 0.4459 |
+| ROC-AUC | not reported | **0.9126** | 0.5000 |
+| Positive-class F1 | not reported | **0.7231** | 0.0000 |
 | Model selection | none — final epoch saved | early stopping on a held-out validation block | — |
 | Reproducible? | no (D8) | yes | — |
 
@@ -44,10 +44,11 @@ lstm-nlp eval --ckpt pytorch/runs/sentiment/<run>/best.pt --split test
 Read naively, the reference wins on accuracy. Four reasons that reading is wrong,
 in increasing order of importance:
 
-1. **Accuracy is the wrong metric here** (D4). The corpus is 79.53% negative, so
-   a classifier that answers *negative* every time scores **0.7953**. The
-   reference's 0.909 is +0.114 over that floor; ours is +0.0973. Neither number
-   means much without the floor beside it, and the reference never printed one.
+1. **Accuracy is the wrong metric here** (D4). The corpus is 80.48% negative
+   after deduplication, so a classifier that answers *negative* every time
+   scores **0.8048**. The reference's 0.909 is +0.104 over that floor; ours is
+   +0.0925. Neither number means much without the floor beside it, and the
+   reference never printed one.
 2. **It was measured on negation-stripped text** (D3). Its pipeline removed all
    14 English negations before a *sentiment* model saw the input, so `"not
    worried"` and `"worried"` were the same string. That is a different, easier
@@ -56,26 +57,28 @@ in increasing order of importance:
    no checkpointing (D5) — its own log shows `val_loss` rising from 0.215 at
    epoch 1 to 0.526 at epoch 7 while training loss fell to 0.015. The saved model
    is the most overfit one it produced.
-4. **Ours is held out; theirs is not.** Our 0.8391 / 0.8926 come from a block no
-   part of model selection ever saw. See §5 — we got this wrong ourselves first,
-   and the correction cost us 0.0094 macro-F1.
+4. **Ours is held out and deduplicated; theirs is neither.** Our 0.8300 /
+   0.8974 come from a block no part of model selection ever saw, and one that
+   shares no cleaned text with training. See §5 — we got both of those wrong
+   ourselves first, and the corrections cost us 0.0094 and 0.0091 macro-F1
+   respectively.
 
 `PRD.md` §6.3 states this outright: matching 0.909 was never a target, because
 reproducing an unbaselined number from a differently-preprocessed task is not
 evidence of anything.
 
-### Confusion matrix, held-out test (n = 3,463)
+### Confusion matrix, held-out test (n = 3,382)
 
 ```
                 predicted
               negative  positive
-true negative     2544       210      precision 0.9401  recall 0.9237  F1 0.9319
-     positive      162       547      precision 0.7226  recall 0.7715  F1 0.7462
+true negative     2582       140      precision 0.9258  recall 0.9486  F1 0.9370
+     positive      207       453      precision 0.7639  recall 0.6864  F1 0.7231
 ```
 
-The minority class is the one that matters and the one accuracy hides: 547 of
-709 positives found. A majority-class predictor finds zero of them and still
-scores 0.7953.
+The minority class is the one that matters and the one accuracy hides: 453 of
+660 positives found. A majority-class predictor finds zero of them and still
+scores 0.8048.
 
 ---
 
@@ -179,8 +182,9 @@ both fixed in `v0.8.1`:
 
 | | Defect | Cost, measured | Fixed |
 |---|---|---|---|
-| — | The sentiment model was selected on the **test** split: early stopping maximised macro-F1 on the rows the headline was reported for | corrected: macro-F1 0.8485 → **0.8391** held out (+0.0094 optimism) | `v0.8.1` |
-| — | A `--max-steps` smoke run silently became the model the API served | macro-F1 **0.6997** served instead of 0.8391 | `v0.8.1` |
+| — | The sentiment model was selected on the **test** split: early stopping maximised macro-F1 on the rows the headline was reported for | corrected: macro-F1 0.8485 → 0.8391 held out (+0.0094 optimism) | `v0.8.1` |
+| — | A `--max-steps` smoke run silently became the model the API served | macro-F1 **0.6997** served instead of the real run's | `v0.8.1` |
+| — | 2.48% of test rows shared their cleaned text with a training row, so the model was partly scored on inputs it had memorised | corrected: macro-F1 0.8391 → **0.8300**, ROC-AUC 0.9303 → **0.9126** | `v1.1.0` |
 
 Every sentiment figure in this document is the corrected one. The first defect
 is the same species as D5 and D7 in the reference — the evaluation set leaking
@@ -214,10 +218,13 @@ Recorded because a report that lists only what went well is marketing.
   The API returns `calibrated: true|false` and the UI says which, because a
   score presented as a probability is the failure this project exists to
   remove.
-- **2.48% of test rows duplicate a training row** — 86 of 3,463, mostly stubs
-  like `"<user> thanks"` (×18). Five distinct cleaned texts carry *both* labels.
-  This is corpus noise, not a splitting defect, but it inflates all scores
-  slightly. A stricter protocol would deduplicate before splitting.
+- ~~2.48% of test rows duplicate a training row~~ **Fixed in v1.1.0.** Rows are
+  deduplicated on cleaned text before splitting, and the five texts carrying
+  contradictory labels are dropped rather than resolved — 270 rows, 2.34%.
+  Afterwards **0** test rows share a training row. It cost what it should have:
+  macro-F1 0.8391 → 0.8300 and ROC-AUC 0.9303 → 0.9126, because the model was
+  previously rewarded for memorising `"<user> thanks"`. The majority-class
+  baseline moved too, 0.7953 → 0.8048, since the duplicates skewed positive.
 - **Text generation has no held-out test block.** Its perplexity is measured on
   the same split early stopping used. `PRD.md` S4 asks for "validation
   perplexity", so the label is honest, but the selection effect is the one fixed

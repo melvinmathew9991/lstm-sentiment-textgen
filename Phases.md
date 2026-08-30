@@ -82,13 +82,14 @@ cd pytorch && pip install -e . && python -m lstm_nlp.cli --help && pytest -q
 | Quantity | Value |
 |---|---|
 | Sentiment rows | 11,541 (9,178 neg / 2,363 pos) |
-| Train / test | 8,078 / 3,463 · pos rate 0.2048 / 0.2047 |
-| — train splits again (Phase 8) | 6,866 train / 1,212 val · pos rate 0.2048 / 0.2046 |
+| Rows | 11,541 loaded · **11,271** after deduplication (v1.1.0) |
+| Train / test | 7,889 / 3,382 · pos rate 0.1949 / 0.1952 |
+| — train splits again (Phase 8) | 6,705 train / 1,184 val · pos rate 0.1949 / 0.1951 |
 | Token length | median 20 · p95 27 · max 35 |
 | Train-only raw vocab | 9,566 |
-| Vocab @ `min_freq=2` | **4,505** on all 8,078 train rows; **4,083** on the 6,866-row training block the model actually uses (Phase 8) |
-| Test OOV rate | **5.23%** at V=4,505; **5.68%** at V=4,083 |
-| Class weight (pos) | 3.884 |
+| Vocab @ `min_freq=2` | **4,045** on the 6,705-row training block the model uses (4,505 on the full un-deduplicated train split) |
+| Test OOV rate | **5.77%** at V=4,045 |
+| Class weight (pos) | 4.130 (3.884 before deduplication) |
 | Alice raw → stripped | 164,045 → 144,607 chars (88.2% kept) |
 | Alice tokens | **27,429** (was 30,674 unstripped) |
 | Alice vocab, **train-only** @ `min_freq=1` | **2,436** (incl. `<unk>`) |
@@ -353,7 +354,7 @@ Candidates, in rough value order:
 |-------|--------|--------|------|
 | P0 Scaffold | ✅ **done** 2026-08-29 | — | 52 tests green · `--help` lists 4 cmds |
 | P1 Data layer | ✅ **done** 2026-08-29 | D3, D6, D7, D9 | 146 tests green · measured values asserted |
-| P2 Sentiment | ✅ **done** 2026-08-29 | D4, D5, D8, D11 | macro-F1 **0.8391** vs 0.4430 (corrected in P8; 0.8485 was selected on test) · 213 tests |
+| P2 Sentiment | ✅ **done** 2026-08-29 | D4, D5, D8, D11 | macro-F1 **0.8300** vs 0.4459 (corrected twice: selection on test in P8, duplicate rows in v1.1.0) · 213 tests |
 | P3 Text-gen | ✅ **done** 2026-08-29 | D6, D9 | ppl **223.54** vs 2,436 · RSS 421 MB |
 | P4 Sampling | ✅ **done** 2026-08-29 | **D2**, D10 | entropy 1.03 -> 7.76 monotonic · 273 tests |
 | P5 CLI | ✅ **done** 2026-08-30 | **D1**, D10 | 4 commands from `C:\Users` · 306 tests |
@@ -361,5 +362,6 @@ Candidates, in rough value order:
 | P7 Streamlit frontend | ✅ **done** 2026-08-30 | — | S17 · S18 · S19 · slider 260 ms · audit 0 skip · 407 tests |
 | P8 Parity | ✅ **done** 2026-08-30 | D11 | `PARITY.md` · 11/11 closed · 412 tests |
 | P9 Hardening | ✅ **done** 2026-08-30 | — | calibration · S10 gate · lint blocking · 435 tests |
+| v1.1.0 Dedup | ✅ **done** 2026-08-30 | — | 0 leaked test rows · macro-F1 0.8300 vs 0.4459 · 440 tests |
 
 **`Memory.md`** is created at the end of P0 (its task 10) and appended to at the end of every phase thereafter (`Rules.md` A3).

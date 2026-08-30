@@ -50,11 +50,11 @@ PRESETS = [
     "service was not good",
 ]
 
-#: Majority-class accuracy on the airline corpus (79.53% negative).
+#: Majority-class accuracy on the deduplicated airline corpus (80.48% negative).
 #:
 #: Not a decoration: it is the number any accuracy claim on this page has to be
 #: read against, and it is measured, not assumed (Phases.md Phase 1).
-MAJORITY_BASELINE = 0.7953
+MAJORITY_BASELINE = 0.8048
 
 client = get_client()
 colours = palette()
@@ -137,7 +137,7 @@ if classify:
     with right:
         metric_with_baseline(
             "model test accuracy",
-            "0.8926",
+            "0.8974",
             f"{MAJORITY_BASELINE:.4f} (always answer negative)",
         )
         st.caption(

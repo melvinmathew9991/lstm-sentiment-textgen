@@ -20,7 +20,10 @@ from torch.utils.data import Dataset
 
 from lstm_nlp.data.preprocess import clean_tweet, count_tokens, tokenize
 from lstm_nlp.errors import DataError
+from lstm_nlp.utils.logging import get_logger
 from lstm_nlp.vocab import PADDED_SPECIALS, Vocab
+
+logger = get_logger(__name__)
 
 LABEL_NAMES: tuple[str, str] = ("negative", "positive")
 REQUIRED_COLUMNS = ("airline_sentiment", "text")
@@ -119,11 +122,28 @@ def collate_sentiment(
     return padded, torch.tensor(lengths, dtype=torch.long), torch.tensor(labels, dtype=torch.long)
 
 
-def load_sentiment_frame(csv_path: str | Path) -> pd.DataFrame:
-    """Read and clean the sentiment CSV.
+def load_sentiment_frame(csv_path: str | Path, *, deduplicate: bool = True) -> pd.DataFrame:
+    """Read and clean the sentiment CSV, optionally removing duplicate rows.
+
+    Deduplication happens **before** anything else touches the frame, which is
+    what makes it work: a duplicate that never reaches the splitter cannot
+    straddle the train/test boundary. Measured on this corpus, 86 of 3,463 test
+    rows (2.48%) previously shared their cleaned text with a training row, so
+    the model was partly rewarded for memorising ``"<user> thanks"``.
+
+    Duplicates are identified on the **cleaned** text, not the raw text, because
+    cleaning is what makes two differently-typed tweets the same input. Two rows
+    the model cannot tell apart are one row as far as evaluation is concerned.
+
+    Rows whose cleaned text carries **contradictory labels** are dropped
+    entirely rather than resolved. There are five such texts here; keeping
+    either label would be inventing an annotation, and keeping both would put
+    the same input in two classes.
 
     Args:
         csv_path: Path to ``airline_sentiment.csv``.
+        deduplicate: Drop repeated and contradictory cleaned texts. Off only for
+            tests that need the raw row count.
 
     Returns:
         The frame with an added ``clean`` column.
@@ -147,7 +167,34 @@ def load_sentiment_frame(csv_path: str | Path) -> pd.DataFrame:
 
     frame = frame.copy()
     frame["clean"] = frame["text"].astype(str).map(clean_tweet)
+    if deduplicate:
+        frame = _drop_duplicate_texts(frame)
     return frame
+
+
+def _drop_duplicate_texts(frame: pd.DataFrame) -> pd.DataFrame:
+    """Keep one row per cleaned text, and none where the labels disagree.
+
+    Order is preserved and the *first* occurrence is kept, so the result is a
+    deterministic function of the input file rather than of dict iteration.
+    """
+    distinct_labels = frame.groupby("clean")["airline_sentiment"].nunique()
+    contradictory = set(distinct_labels[distinct_labels > 1].index)
+
+    conflicted_rows = int(frame["clean"].isin(contradictory).sum())
+    kept = frame[~frame["clean"].isin(contradictory)].drop_duplicates(
+        subset="clean", keep="first"
+    )
+
+    removed = len(frame) - len(kept)
+    if removed:
+        logger.info(
+            "deduplicated: %d of %d rows removed -- %d repeated, %d contradictory "
+            "across %d texts",
+            removed, len(frame), removed - conflicted_rows, conflicted_rows,
+            len(contradictory),
+        )
+    return kept.reset_index(drop=True)
 
 
 def compute_class_weights(labels: list[int], num_classes: int = 2) -> torch.Tensor:
@@ -170,6 +217,7 @@ def prepare_sentiment_data(
     val_size: float = 0.15,
     split_seed: int = 10,
     stratify: bool = True,
+    deduplicate: bool = True,
     min_freq: int = 2,
     max_len: int = 30,
 ) -> SentimentSplits:
@@ -191,6 +239,8 @@ def prepare_sentiment_data(
             whole dataset, so changing it never moves the test rows.
         split_seed: Split RNG seed; pinned at 10 to match the frozen reference.
         stratify: Preserve the class ratio across splits.
+        deduplicate: Remove repeated and contradictory cleaned texts before
+            splitting, so no duplicate can straddle the train/test boundary.
         min_freq: Minimum training frequency for a token to earn an index.
         max_len: Truncation length (p99 of this data is 30 tokens).
 
@@ -205,7 +255,7 @@ def prepare_sentiment_data(
             f"val_size must be a fraction in (0, 1), got {val_size}. Model "
             f"selection needs a block that is not the test block."
         )
-    frame = load_sentiment_frame(csv_path)
+    frame = load_sentiment_frame(csv_path, deduplicate=deduplicate)
     texts = frame["clean"].tolist()
     labels = frame["airline_sentiment"].astype(int).tolist()
 

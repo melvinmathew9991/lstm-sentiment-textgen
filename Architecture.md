@@ -143,21 +143,21 @@ D:\Sentiment_Detection_and_Text Generation_with_Many-to-One\
 
 ```
 data/airline_sentiment.csv   11,541 rows · 9,178 neg / 2,363 pos
+deduplicate on clean text    11,271 kept · 270 removed (2.34%)  [v1.1.0]
         │
         ▼
 clean_tweet()                lowercase · http…→<url> · @x→<user> · &amp;→and
   [FR-3 · fixes D3]          strip punct EXCEPT apostrophes   ← negations survive
         │                    median 20 tok · p95 27 · max 35
         ▼
-stratified split 70/30       random_state=10 · train pos 0.2048 · test pos 0.2047
-  [FR-6]                     8,078 train / 3,463 test
-                             train then splits 6,866 / 1,212 val  [Phase 8]
+stratified split 70/30       random_state=10 · train pos 0.1949 · test pos 0.1952
+  [FR-6]                     7,889 train / 3,382 test
+                             train then splits 6,705 / 1,184 val  [Phase 8]
         │
         ├──── TRAIN ONLY ───▶ Vocab.build(min_freq=2)   [FR-4 · fixes D7]
-        │                     built on the 6,866-row training block  [Phase 8]
-        │                     8,703 raw → 4,083 kept (incl <pad>=0, <unk>=1)
-        │                     test OOV = 5.68% of tokens → all map to <unk>
-        │                     (4,505 / 5.23% when built on all 8,078 train rows)
+        │                     built on the 6,705-row training block
+        │                     4,045 kept (incl <pad>=0, <unk>=1)
+        │                     test OOV = 5.77% of tokens → all map to <unk>
         ▼
 encode + truncate to max_len=30  ·  int64 indices, NEVER one-hot  [FR-8]
         │
@@ -167,7 +167,7 @@ DataLoader(batch=64, collate_fn=pad_to_longest_in_batch)
         ▼
 ┌───────────────────────────────────────────────────────┐
 │ SentimentLSTM                                          │
-│   Embedding(4083, 64, padding_idx=0)          261,312 │
+│   Embedding(4045, 64, padding_idx=0)          258,880 │
 │   LSTM(64→64, 2 layers, dropout=0.3)           66,560 │
 │   Dropout(0.4)                                        │
 │   Linear(64, 2)                                   130 │
@@ -176,7 +176,7 @@ DataLoader(batch=64, collate_fn=pad_to_longest_in_batch)
 └───────────────────────────────────────────────────────┘
         │
         ▼
-CrossEntropyLoss(weight=[1.0, 3.884])   [FR-14 · fixes D4]
+CrossEntropyLoss(weight=[1.0, 4.130])   [FR-14 · fixes D4]
 Adam(lr=1e-3) · clip_grad_norm_(5.0)
 EarlyStopping(monitor=val_macro_f1, mode=max, patience=5)  [FR-13 · fixes D5]
         │
@@ -295,7 +295,7 @@ The direct fix for **D8**: the old `.h5` is unusable because the vocab that defi
                    "lstm_nlp": "0.1.0"},
 
   "model_class": "SentimentLSTM",
-  "model_cfg":   {"vocab_size": 4083, "embed_dim": 64, "hidden_dim": 64,
+  "model_cfg":   {"vocab_size": 4045, "embed_dim": 64, "hidden_dim": 64,
                   "num_layers": 2, "dropout": 0.3, "num_classes": 2},
   "model_state": {...},                    # state_dict of the BEST epoch
 
@@ -305,10 +305,10 @@ The direct fix for **D8**: the old `.h5` is unusable because the vocab that defi
                  "max_len": 30, "lowercase": true,
                  "url_token": "<url>", "user_token": "<user>"},
 
-  "train": {"best_epoch": 7, "seed": 42, "class_weights": [1.0, 3.884],
+  "train": {"best_epoch": 8, "seed": 42, "class_weights": [1.0, 4.130],
             "stopped_early": true},
   "metrics": {"test_accuracy": ..., "test_macro_f1": ...,
-              "baseline_accuracy": 0.7953, "baseline_macro_f1": 0.4430}
+              "baseline_accuracy": 0.8048, "baseline_macro_f1": 0.4459}
 }
 ```
 

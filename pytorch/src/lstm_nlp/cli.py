@@ -101,6 +101,7 @@ def cmd_eval(args: argparse.Namespace) -> int:
         val_size=cfg.data.val_size,
         split_seed=cfg.data.split_seed,
         stratify=cfg.data.stratify,
+        deduplicate=cfg.data.deduplicate,
         min_freq=cfg.data.min_freq,
         max_len=cfg.data.max_len,
     )
