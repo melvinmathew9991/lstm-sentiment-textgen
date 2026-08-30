@@ -41,6 +41,14 @@ addopts = "-q --strict-markers -m 'not slow'"
 markers = [
     "realdata: needs the full corpora in data/",
     "slow: runs a real training step; excluded from the default fast path",
+    # A --max-steps smoke checkpoint satisfies every other trained-model test:
+    # measured 2026-08-30, a 20-second smoke train takes the full suite from
+    # 391 passed / 53 skipped to 442 passed / 4 failed / 2 skipped. These four
+    # are the four, and they fail for the right reason -- a three-step model
+    # genuinely does not clear a macro-F1 gate or stop early. CI's matrix legs
+    # smoke-train and deselect them; the `trained` job trains properly and runs
+    # everything.
+    "fulltrain: asserts model quality, so a --max-steps smoke run will not do",
 ]
 filterwarnings = ["error::DeprecationWarning:lstm_nlp.*"]
 

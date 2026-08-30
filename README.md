@@ -126,10 +126,17 @@ checkpoints and every test that loads a trained model — the negation aggregate
 entropy monotonicity on real logits, the checkpoint round-trip against a real
 run, and the subprocess CLI tests — skips at runtime rather than failing.
 Measured on a clean tree: `pytest -m ""` gives **391 passed, 53 skipped**; after
-the two `train` commands above it gives **444 passed, 0 skipped**. A skip is
-green, so nothing anywhere flags this. CI is in the same position and cannot be
-otherwise until it trains a smoke model of its own, which means **no headline
-number in this repository is verified by CI** — see `Memory.md`, Phase 5.
+the two `train` commands above it gives **448 passed, 0 skipped**. A skip is
+green, so nothing local flags it.
+
+CI no longer has this problem. Every matrix leg smoke-trains (`--max-steps 3`,
+~20 s) so 442 of the 448 run on both Python versions, and a separate
+`trained-model gates` job trains both models properly and runs the whole suite
+with a **skip budget of zero**. The four tests a smoke model cannot satisfy —
+the macro-F1 gate, negation, minority-class recall, early stopping — carry the
+`fulltrain` marker and run only in that job. Until 2026-08-30 no headline number
+in this repository had ever been verified by CI; see `Memory.md`, Phase 5, for
+how long that was true and how it was found.
 
 ---
 

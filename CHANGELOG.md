@@ -9,6 +9,65 @@ Defect IDs (D1-D11) refer to `PRD.md` section 1.1.
 
 Nothing planned.
 
+## [1.2.3] - 2026-08-30 - CI finally checks a headline number
+
+The item deferred at Phase 5 and restated at Phase 9, made more valuable by
+1.2.2's finding that a clean local tree skips the same tests CI does.
+
+### Added
+
+- **A smoke train on every matrix leg.** `runs/` is gitignored, so CI had no
+  checkpoint and every test that loads a trained model skipped at runtime --
+  53 of them. Phase 5 recorded the consequence plainly: *"no headline number in
+  this repository has ever been verified by CI."* That stayed true for five
+  phases and three releases, because a skip is green.
+
+  Measured before choosing the fix rather than after:
+
+        no checkpoints    391 passed   53 skipped
+        smoke  (~20 s)    442 passed    4 failed   2 skipped
+        real   (~3 min)   448 passed    0 failed   0 skipped
+
+  A twenty-second `--max-steps 3` run recovers 49 of the 53, on both 3.10 and
+  3.12 -- including the predictor, sampler and subprocess CLI paths, which are
+  the version-sensitive ones and had never run in CI at all.
+
+- **A `trained-model gates` job** that trains both models properly on 3.12 and
+  runs the whole suite. What it asserts is the gates -- macro-F1 >= 0.75,
+  perplexity <= 400, entropy monotonic across T, negation direction over five
+  pairs -- never the published figures. Determinism is guaranteed on CPU
+  (`Rules.md` 7) and every reproduction so far has been on Windows/Python 3.10;
+  bit-identity across operating systems is a stronger claim than this project
+  has measured, so asserting 0.8300 in a Linux job would be inventing a
+  guarantee (`Rules.md` A4). The job prints `lstm-nlp eval` for both models so
+  the numbers are in the log to be read.
+
+- **A skip budget on both jobs**, checked in the shell: `-le 2` on the matrix
+  legs and `-eq 0` on the trained job. This is the part that outlives the fix.
+  Adding a training step fixes today; budgeting the skips is what stops the same
+  silence returning the next time a fixture goes missing, because the failure
+  mode here was never a red build -- it was a green one that tested less than it
+  looked like it did.
+
+  The two skips the matrix legs tolerate are the Phase 8 guard working: the API
+  refuses to resolve a run stamped with `max_steps`, so its two latency tests
+  skip. Observed, not assumed.
+
+- **A `fulltrain` pytest marker** for the four tests a smoke model cannot
+  satisfy -- the macro-F1 gate, negation, minority-class recall, early stopping.
+  They fail on a smoke model for the right reason: a three-step model does not
+  clear a quality gate, and a run capped at three steps per epoch never
+  early-stops. Marked rather than deselected by name in the workflow, because a
+  test excluded in YAML is invisible from the test file.
+
+### Not verified
+
+The workflow itself has never run. Both shell blocks were rehearsed locally
+against the states they will meet -- 442 passed / 2 skipped under smoke
+checkpoints, 448 passed / 0 skipped under real ones, and the YAML parses into
+four jobs -- but a workflow that has only been rehearsed is not a workflow that
+has passed.
+
 ## [1.2.2] - 2026-08-30 - The figures a correction did not reach
 
 An independent verification pass: retrain both models from a clean tree,

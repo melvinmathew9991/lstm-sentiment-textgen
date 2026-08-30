@@ -1590,3 +1590,99 @@ correction is not finished when the measurement is updated; it is finished when
 the things that depend on the measurement have been enumerated. Nothing here was
 found by the audit. All of it was found by retraining the model and reading the
 output next to the document.
+
+---
+
+## v1.2.3 — CI finally checks a headline number ✅ (2026-08-30)
+
+The item deferred at Phase 5, restated at Phase 9, and made more valuable by the
+v1.2.2 finding that a clean local tree skips the same tests CI does.
+
+### What was actually deferred, and what it cost
+
+Phase 5 recorded it plainly: **"no headline number in this repository has ever
+been verified by CI."** macro-F1, perplexity, and the entropy curve that is the
+whole D2 demonstration rested on one laptop and a fixed seed. `-m ""` removes
+marker deselection; it cannot conjure a checkpoint, and `runs/` is gitignored,
+so every test that loads a trained model skipped at runtime — **53 of them**.
+
+A skip is green. Nothing in the workflow, the audit or the suite reported it.
+It was found once, at Phase 5, by opening a CI log instead of trusting a
+sentence; and then it stayed open for five phases and three releases.
+
+### The measurement that shaped the fix
+
+I did not guess how much a smoke run buys. Moved the real checkpoints aside,
+trained both models at `--max-steps 3` (5.6 s + 14.8 s), and ran the suite:
+
+```
+no checkpoints    391 passed   53 skipped
+smoke  (~20 s)    442 passed    4 failed   2 skipped
+real   (~3 min)   448 passed    0 failed   0 skipped
+```
+
+So a twenty-second smoke train recovers **49 of the 53**. The four it cannot are
+the four that assert *quality* — the macro-F1 gate, negation direction,
+minority-class recall, and early stopping — and they fail for the right reason:
+a three-step model genuinely does not clear a macro-F1 gate, and a run capped at
+three steps per epoch genuinely never early-stops. They carry a new `fulltrain`
+marker rather than being deselected by name in a workflow file, because a test
+deselected by name in YAML is invisible from the test file.
+
+The two remaining skips under smoke are the Phase 8 guard working: the API
+refuses to resolve a run stamped with `max_steps`, so its two latency tests skip.
+That is the guard doing exactly its job, observed rather than assumed.
+
+### Built
+
+- **Every matrix leg smoke-trains** before `pytest -m "not fulltrain"`, so 442 of
+  448 tests run on both 3.10 and 3.12 — including the predictor, sampler and
+  subprocess CLI paths, which are the version-sensitive ones and had never run
+  in CI at all.
+- **A `trained-model gates` job** on 3.12 trains both models for real and runs
+  the whole suite. One Python, not the matrix: version compatibility is already
+  covered by the legs above, and this job costs ~3 minutes of training.
+- **A skip budget on both**, checked in the shell rather than by eye: `-le 2` on
+  the matrix legs (exactly the two the max_steps guard causes) and `-eq 0` on the
+  trained job. This is the part that matters. Adding a training step fixes today;
+  budgeting the skips is what stops the same silence returning the next time a
+  fixture goes missing, because the failure mode here was never a red build — it
+  was a green one that tested less than it looked like it did.
+- The trained job ends by printing `lstm-nlp eval` for both models, so the run
+  log carries the numbers it just checked.
+
+### What is asserted, and what deliberately is not
+
+The **gates**: macro-F1 >= 0.75, perplexity <= 400, entropy monotonic across
+T, negation direction over five pairs. Never the published figures themselves.
+
+`Rules.md` §7 guarantees determinism *on CPU*, and every reproduction in this
+project has been on Windows/Python 3.10. Bit-identity across operating systems is
+a stronger claim than the project has ever measured, so asserting `0.8300` in a
+Linux job would be inventing a guarantee (`Rules.md` A4). If the Linux run agrees
+to four decimals, that becomes a new measurement worth recording — and the eval
+output is printed so it can be read. It is not an assertion until someone has
+looked.
+
+### Rehearsed, not assumed
+
+I cannot run GitHub Actions from here, so both shell blocks were executed locally
+against the states they will meet:
+
+```
+smoke checkpoints:  442 passed, 2 skipped, 4 deselected   skipped: 2 (budget 2)  OK
+real  checkpoints:  448 passed, 0 skipped                 skipped: 0 (budget 0)  OK
+workflow YAML:      parses; 4 jobs (test, trained, audit, lint)
+```
+
+`grep -c '^SKIPPED'` counts the `-rs` summary block only — verbose mode's
+per-test `... SKIPPED (reason)` lines are prefixed by the test path and do not
+match, which is why the count was rehearsed under `-v -rs` rather than under
+`-q`. **The workflow itself remains unverified until it runs**, which is the same
+class of gap the release pipeline hit in the sibling project, and is stated here
+rather than discovered later.
+
+### Cost
+
+~20 s on each matrix leg, ~5 min for the new job. Against five phases of a green
+build that tested 53 fewer things than it appeared to.

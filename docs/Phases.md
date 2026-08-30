@@ -365,5 +365,6 @@ Candidates, in rough value order:
 | v1.1.0 Dedup | ✅ **done** 2026-08-30 | — | 0 leaked test rows · macro-F1 0.8300 vs 0.4459 · 440 tests |
 | v1.2.0 Text-gen held-out | ✅ **done** 2026-08-30 | — | test perplexity 267.54 vs 2,436 · baseline unmoved · 444 tests |
 | v1.2.2 Verification pass | ✅ **done** 2026-08-30 | — | every published figure re-measured · 16 superseded figures retired · stale-figure gate widened to configs, `src/`, `tests/` · 448 tests |
+| v1.2.3 CI trains | ✅ **done** 2026-08-30 | — | matrix legs smoke-train (442/448 run) · `trained-model gates` job trains for real · skip budget 2 / 0 |
 
 **`Memory.md`** is created at the end of P0 (its task 10) and appended to at the end of every phase thereafter (`Rules.md` A3).
