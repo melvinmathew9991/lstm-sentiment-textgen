@@ -160,6 +160,10 @@ class PredictResponse(_Model):
     n_tokens: int
     n_unk: int
     unk_rate: float
+    #: Whether a validation-fitted temperature was applied. False means the
+    #: number is a score, not a calibrated probability -- the caller has to be
+    #: able to tell those apart.
+    calibrated: bool = False
 
 
 class BatchPredictResponse(_Model):

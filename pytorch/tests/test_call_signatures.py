@@ -123,12 +123,13 @@ def _call_sites() -> list[tuple[Path, ast.Call, Signature]]:
         # names have to be carried.
         imported: dict[str, tuple[str, str]] = {}
         for node in ast.walk(tree):
-            if isinstance(node, ast.ImportFrom) and node.module:
-                if node.module.startswith("lstm_nlp"):
-                    source = node.module.split(".")[-1]
-                    for alias in node.names:
-                        if alias.name in SIGNATURES.get(source, {}):
-                            imported[alias.asname or alias.name] = (source, alias.name)
+            if isinstance(node, ast.ImportFrom) and node.module and node.module.startswith(
+                "lstm_nlp"
+            ):
+                source = node.module.split(".")[-1]
+                for alias in node.names:
+                    if alias.name in SIGNATURES.get(source, {}):
+                        imported[alias.asname or alias.name] = (source, alias.name)
 
         for node in ast.walk(tree):
             if not isinstance(node, ast.Call):

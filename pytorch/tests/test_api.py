@@ -127,6 +127,7 @@ def test_predict_returns_the_documented_shape(client: TestClient) -> None:
     body = response.json()
     assert set(body) == {
         "label", "label_id", "probabilities", "n_tokens", "n_unk", "unk_rate",
+        "calibrated",
     }
     assert body["label"] in ("negative", "positive")
     assert sum(body["probabilities"].values()) == pytest.approx(1.0, abs=1e-4)

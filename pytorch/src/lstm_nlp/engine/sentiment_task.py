@@ -16,7 +16,13 @@ from torch import nn
 from torch.utils.data import DataLoader
 
 from lstm_nlp.config import SentimentConfig, dump_config
-from lstm_nlp.data.sentiment import LABEL_NAMES, SentimentSplits, collate_sentiment, prepare_sentiment_data
+from lstm_nlp.data.sentiment import (
+    LABEL_NAMES,
+    SentimentSplits,
+    collate_sentiment,
+    prepare_sentiment_data,
+)
+from lstm_nlp.engine.calibration import calibrate
 from lstm_nlp.engine.callbacks import BestWeights, EarlyStopping
 from lstm_nlp.engine.metrics import ClassificationReport, classification_metrics
 from lstm_nlp.engine.trainer import StepFn, Trainer, TrainingHistory
@@ -179,6 +185,19 @@ def train_sentiment(cfg: SentimentConfig, max_steps: int | None = None) -> Path:
     history: TrainingHistory = trainer.fit(train_loader, val_loader, cfg.train.epochs)
 
     val_report, _ = evaluate_report(model, val_loader, device)
+
+    # Temperature scaling, fitted on validation and never on test. It is
+    # monotonic, so every metric above and below is bit-identical either
+    # way -- it buys honest confidence, not a better score.
+    _, val_logits, val_targets = trainer.evaluate(val_loader)
+    calibration = calibrate(
+        torch.from_numpy(val_logits), torch.from_numpy(val_targets)
+    )
+    logger.info(
+        "calibration: T=%.4f  ECE %.4f -> %.4f",
+        calibration["temperature"], calibration["ece_before"],
+        calibration["ece_after"],
+    )
     report, _ = evaluate_report(model, test_loader, device)
     print("\nValidation metrics (early stopping selected on these)\n" + val_report.format() + "\n")
     print("Test metrics (held out; scored once)\n" + report.format() + "\n")
@@ -205,6 +224,7 @@ def train_sentiment(cfg: SentimentConfig, max_steps: int | None = None) -> Path:
             # to serve it (Rules.md B7).
             "max_steps": max_steps,
             "val_metrics": val_report.to_dict(),
+            "calibration": calibration,
         },
     )
     history.save(run_dir / "history.json")

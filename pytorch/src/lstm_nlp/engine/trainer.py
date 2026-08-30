@@ -201,10 +201,11 @@ class Trainer:
             )
             logger.info("epoch %d/%d  %s", epoch + 1, epochs, extra)
 
-            if self.best_weights is not None:
-                if self.best_weights.step(epoch, record, self.model):
-                    logger.info("  new best %s=%.4f", self.best_weights.monitor,
-                                self.best_weights.best)
+            if self.best_weights is not None and self.best_weights.step(
+                epoch, record, self.model
+            ):
+                logger.info("  new best %s=%.4f", self.best_weights.monitor,
+                            self.best_weights.best)
 
             if self.early_stopping is not None and self.early_stopping.step(epoch, record):
                 logger.info(

@@ -193,12 +193,27 @@ under "lessons learned".
 
 Recorded because a report that lists only what went well is marketing.
 
-- **Probabilities are over-confident.** Expected Calibration Error **0.066** on
-  test; inputs scored ~0.75 are positive about 46% of the time. This follows
-  from `class_weighting: balanced` (3.884:1), which is the right trade for
-  macro-F1 and the wrong one for calibration. The UI labels these outputs
-  "probability". Fixable with Platt or isotonic scaling on the validation block,
-  which now exists.
+- **Probabilities were over-confident; now partly corrected.** Expected
+  Calibration Error was **0.0609** on test. Phase 9 fits a temperature on the
+  validation block (T = 1.5922), which brings test ECE to **0.0324** -- a 47%
+  reduction on data the fit never saw. Because temperature scaling is
+  monotonic, **no decision changed and no metric in this document moved**:
+  macro-F1 and accuracy are bit-identical either way, and 0 of 3,463 test
+  predictions flipped.
+
+  It is improved, not solved. A single global scalar cannot fix bin-specific
+  miscalibration, and the middle of the range is still over-confident by
+  0.11-0.21:
+
+        bin        n   mean p  observed     gap
+        0.4-0.5   82    0.450     0.305   +0.145
+        0.5-0.6   93    0.551     0.344   +0.207
+        0.7-0.8  103    0.750     0.553   +0.196
+        0.9-1.0  344    0.949     0.913   +0.036
+
+  The API returns `calibrated: true|false` and the UI says which, because a
+  score presented as a probability is the failure this project exists to
+  remove.
 - **2.48% of test rows duplicate a training row** — 86 of 3,463, mostly stubs
   like `"<user> thanks"` (×18). Five distinct cleaned texts carry *both* labels.
   This is corpus noise, not a splitting defect, but it inflates all scores

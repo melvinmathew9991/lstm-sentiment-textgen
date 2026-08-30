@@ -120,6 +120,19 @@ if classify:
         st.write("")
         probability_bars(result["probabilities"])
         unk_badge(result["n_unk"], result["n_tokens"])
+        # Whether these numbers are calibrated probabilities or merely scores is
+        # not a detail the reader can infer, so the page says which.
+        if result.get("calibrated"):
+            st.caption(
+                "Calibrated: a temperature fitted on held-out validation data is "
+                "applied, so these read as probabilities rather than scores."
+            )
+        else:
+            st.caption(
+                "**Uncalibrated.** These are scores, not calibrated probabilities — "
+                "this checkpoint carries no fitted temperature, so treat the "
+                "magnitudes as a ranking only."
+            )
 
     with right:
         metric_with_baseline(

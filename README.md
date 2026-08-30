@@ -167,4 +167,4 @@ The original course materials (`modular_code/`, `notebook/`, the solution PDF) a
 | 6 · FastAPI backend | ✅ | — |
 | 7 · Streamlit frontend | ✅ | — |
 | 8 · Parity report | ✅ | D11 |
-| 9 · Hardening | ⬜ | optional |
+| 9 · Hardening | ✅ | — |

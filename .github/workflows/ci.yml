@@ -79,6 +79,11 @@ jobs:
         with:
           python-version: "3.12"
       - run: pip install ruff
-      # Non-blocking until Phase 9 (Rules.md section 9); surfaces drift meanwhile.
-      - run: ruff check pytorch/ --output-format=github || true
+      # Blocking from Phase 9 (Rules.md section 9). The tree is clean, so the
+      # next finding is new drift rather than accumulated debt.
+      - run: ruff check pytorch/ --output-format=github
+      # Formatting stays advisory. `ruff format` would rewrite 31 hand-laid-out
+      # files -- aligned tables, deliberate line breaks in measured output --
+      # for no correctness gain. Adopting a formatter is a decision to take on
+      # purpose, not a side effect of turning lint on.
       - run: ruff format --check pytorch/ || true

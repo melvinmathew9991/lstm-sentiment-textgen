@@ -40,6 +40,7 @@ class SentimentPrediction:
     probabilities: dict[str, float]
     n_tokens: int
     n_unk: int
+    calibrated: bool = False
 
     @property
     def unk_rate(self) -> float:
@@ -55,6 +56,7 @@ class SentimentPrediction:
             "n_tokens": self.n_tokens,
             "n_unk": self.n_unk,
             "unk_rate": round(self.unk_rate, 4),
+            "calibrated": self.calibrated,
         }
 
 
@@ -113,6 +115,18 @@ class SentimentPredictor(_Predictor):
         super().__init__(checkpoint_path)
         self.max_len: int = self.payload["preprocess"]["max_len"]
 
+        # Temperature fitted on the validation block at training time. Absent in
+        # checkpoints written before Phase 9, where 1.0 leaves behaviour exactly
+        # as it was -- an old checkpoint stays usable and stays honest about
+        # being uncalibrated.
+        self.calibration: dict = self.payload.get("train", {}).get("calibration", {})
+        self.temperature: float = float(self.calibration.get("temperature", 1.0))
+
+    @property
+    def is_calibrated(self) -> bool:
+        """Whether a fitted temperature is being applied to this model."""
+        return bool(self.calibration)
+
     def predict(self, text: str) -> SentimentPrediction:
         """Classify one string.
 
@@ -132,7 +146,9 @@ class SentimentPredictor(_Predictor):
 
         with torch.no_grad():
             logits = self.model(torch.tensor([ids]), torch.tensor([len(ids)]))
-            probabilities = torch.softmax(logits, dim=1)[0]
+            # Temperature scaling is monotonic, so this cannot change the label
+            # -- only how confident the reported number claims to be.
+            probabilities = torch.softmax(logits / self.temperature, dim=1)[0]
 
         label_id = int(probabilities.argmax())
         return SentimentPrediction(
@@ -143,6 +159,7 @@ class SentimentPredictor(_Predictor):
             },
             n_tokens=len(tokens),
             n_unk=n_unk,
+            calibrated=self.is_calibrated,
         )
 
     def predict_batch(self, texts: list[str]) -> list[SentimentPrediction]:

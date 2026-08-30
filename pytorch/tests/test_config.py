@@ -6,7 +6,6 @@ from pathlib import Path
 
 import pytest
 import yaml
-
 from pydantic import ValidationError
 
 from lstm_nlp.config import SentimentConfig, TextGenConfig, dump_config, load_config
