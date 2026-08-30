@@ -288,6 +288,42 @@ Recorded because a report that lists only what went well is marketing.
   > figures: they describe a model that no longer exists, scored on a raw
   > softmax the product no longer returns. The conclusion survived the
   > correction unchanged, which is why nothing downstream moved.
+- **Seeded reproducibility holds within a platform, and for sentiment it does
+  not hold across one.** Measured 2026-08-30, the first time the training path
+  ran anywhere but the dev machine. CI (Linux, Python 3.12) against the dev
+  machine (Windows, Python 3.10.11), same `torch` 2.13.0+cpu, same seed:
+
+        task         dev machine            CI                     gate
+        text-gen     ppl 267.54             ppl 267.54             identical
+                     CE 5.5893              CE 5.5893              identical
+                     top-1 0.1367           top-1 0.1367           identical
+                     val 186.27             val 186.27             identical
+        sentiment    macro-F1 0.8300        macro-F1 0.8239        -0.0061
+                     accuracy 0.8974        accuracy 0.8953        -0.0021
+                     ROC-AUC  0.9126        ROC-AUC  0.9105        -0.0021
+
+  Text generation is bit-identical through every epoch. Sentiment diverges at
+  **epoch 1** -- train_loss 0.5840 against 0.5801 -- and early stopping then
+  selects epoch 12 rather than epoch 9, which is what moves the test figures.
+
+  What it is **not**: the data. Every `realdata` assertion passed on both
+  stacks, so both trained on the same 6,705 / 1,184 / 3,382 rows, the same
+  4,045-token vocabulary, the same 4.130 class weight and the same 5.77% OOV.
+  Nor is it thread count -- re-running locally at `OMP_NUM_THREADS=1` reproduces
+  the dev machine's trajectory exactly, epoch 1 loss and selected epoch alike.
+
+  What it might be, unisolated: the operating system, the Python version, or the
+  rest of the dependency closure. `requirements.txt` carries **lower bounds
+  only**, so CI resolved numpy 2.5.2 / pandas 3.0.5 / scikit-learn 1.9.0 against
+  the dev machine's 2.2.6 / 2.3.3 / 1.7.2. That makes NFR-8's "reproducible
+  install from a pinned `requirements.txt`" not quite true of the file as it
+  stands, and pinning it is the experiment that would separate the candidates.
+  Recorded rather than guessed at.
+
+  Both runs clear every gate, and the difference is a fifth of the +0.0094
+  optimism the Phase 8 selection defect was worth -- so nothing in this document
+  changes. What changes is the scope of the claim: `Rules.md` §7 now says *same
+  platform and same dependency closure*, because that is what has been measured.
 - ~~The audit's defect-coverage check is loose.~~ **Fixed in v1.0.0 (Phase 9).**
   It matched the concatenated source of every test file, so D4, D8 and D10 were
   "covered" by words in docstrings and D10's intended needle `magic` matched

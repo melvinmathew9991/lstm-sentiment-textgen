@@ -1686,3 +1686,50 @@ rather than discovered later.
 
 ~20 s on each matrix leg, ~5 min for the new job. Against five phases of a green
 build that tested 53 fewer things than it appeared to.
+
+### The first run earned its keep
+
+It passed — 448 passed, 0 skipped, every gate cleared — and it immediately
+measured something this project had never measured: whether the numbers
+reproduce off the dev machine.
+
+```
+                  dev machine (Win, py3.10)   CI (Linux, py3.12)
+  text-gen ppl    267.54                      267.54      identical
+           CE     5.5893                      5.5893      identical
+           top-1  0.1367                      0.1367      identical
+           val    186.27                      186.27      identical
+  sentiment  F1   0.8300                      0.8239      -0.0061
+             acc  0.8974                      0.8953      -0.0021
+             AUC  0.9126                      0.9105      -0.0021
+```
+
+Text generation is bit-identical through every epoch. Sentiment diverges at
+**epoch 1** — train_loss 0.5840 against 0.5801 — and early stopping then selects
+epoch 12 rather than epoch 9, which is what moves the test figures.
+
+**What it is not.** Not the data: every `realdata` assertion passed on both
+stacks, so both trained on the same 6,705 / 1,184 / 3,382 rows, the same 4,045
+vocabulary, the same 4.130 weight, the same 5.77% OOV. Not thread count either —
+I re-ran locally at `OMP_NUM_THREADS=1` and got the dev machine's trajectory
+exactly, epoch-1 loss and selected epoch alike. Same torch, too: 2.13.0+cpu on
+both.
+
+**What it might be, unisolated.** The operating system, the Python version, or
+the rest of the closure. `requirements.txt` carries lower bounds only, so CI
+resolved numpy 2.5.2 / pandas 3.0.5 / scikit-learn 1.9.0 against 2.2.6 / 2.3.3 /
+1.7.2 here — which also means NFR-8's *"reproducible install from a pinned
+`requirements.txt`"* is not quite true of the file as it stands. Pinning it is
+the experiment that separates the candidates, and it is a decision with a blast
+radius, so it is recorded rather than taken.
+
+**Why this is the argument for the job.** The gates were deliberately written as
+gates — macro-F1 ≥ 0.75, perplexity ≤ 400 — and not as pinned figures, on the
+reasoning that bit-identity across operating systems was a stronger claim than
+the project had measured. That reasoning was right, and the first run proved it
+the expensive way round: had the job asserted `0.8300`, it would be red now, on
+a result that is correct. `Rules.md` §7 is narrowed to what has been measured.
+
+The deltas are a fifth of the +0.0094 the Phase 8 selection defect was worth, and
+both runs clear every gate, so no figure in `PARITY.md` moves. What moved is the
+scope of a claim — which is the whole business of this repository.

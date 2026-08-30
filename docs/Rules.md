@@ -131,7 +131,7 @@ Custom exceptions live in `lstm_nlp/errors.py`, all subclassing `LstmNlpError`.
 - The split seed (`10`) is separate from the training seed (`42`) — kept from the reference for comparability.
 - Every run writes its **fully resolved** config to `runs/.../config.yaml`. Not the input file — the merged, defaulted, validated object.
 - Library versions are recorded in every checkpoint.
-- Same seed ⇒ identical test metrics (S10). If a change breaks this, it is a bug, not a nuisance.
+- Same seed ⇒ identical test metrics (S10) **on the same platform and the same dependency closure**. If a change breaks that, it is a bug, not a nuisance. Across platforms it is measured, not assumed: on 2026-08-30 the first Linux run of the training path reproduced text generation bit-for-bit (perplexity 267.54, cross-entropy 5.5893, top-1 0.1367) and did **not** reproduce sentiment (macro-F1 0.8300 → 0.8239), which diverges at epoch 1 and selects a different epoch. See `PARITY.md` §6.
 - Determinism is guaranteed on CPU only. GPU cuDNN LSTM kernels are non-deterministic; document it rather than fight it.
 
 ---

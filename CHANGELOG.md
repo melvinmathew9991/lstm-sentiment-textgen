@@ -60,13 +60,32 @@ The item deferred at Phase 5 and restated at Phase 9, made more valuable by
   early-stops. Marked rather than deselected by name in the workflow, because a
   test excluded in YAML is invisible from the test file.
 
-### Not verified
+### What the first run found
 
-The workflow itself has never run. Both shell blocks were rehearsed locally
-against the states they will meet -- 442 passed / 2 skipped under smoke
-checkpoints, 448 passed / 0 skipped under real ones, and the YAML parses into
-four jobs -- but a workflow that has only been rehearsed is not a workflow that
-has passed.
+It passed -- 448 passed, 0 skipped, every gate cleared -- and it immediately
+earned its keep by measuring something the project had never measured: whether
+the numbers reproduce off the dev machine.
+
+Text generation does, bit for bit: perplexity 267.54, cross-entropy 5.5893,
+top-1 0.1367, validation 186.27, and every epoch's losses identical. Sentiment
+does not: macro-F1 0.8300 -> **0.8239**, accuracy 0.8974 -> 0.8953, ROC-AUC
+0.9126 -> 0.9105. It diverges at epoch 1 (train_loss 0.5840 against 0.5801) and
+early stopping then selects epoch 12 rather than 9.
+
+Not the data -- every `realdata` assertion passed on both stacks, so both trained
+on the same rows, vocabulary, class weight and OOV rate. Not thread count --
+re-running locally at `OMP_NUM_THREADS=1` reproduces the dev machine exactly.
+Unisolated between operating system, Python version, and the rest of the
+closure: `requirements.txt` carries lower bounds only, so CI resolved numpy
+2.5.2 / pandas 3.0.5 / scikit-learn 1.9.0 against the dev machine's 2.2.6 /
+2.3.3 / 1.7.2 -- which also means NFR-8's "reproducible install from a pinned
+requirements.txt" is not quite true of the file as it stands.
+
+`Rules.md` 7 now scopes the S10 claim to the same platform and the same
+dependency closure, because that is what has been measured. `PARITY.md` 6
+carries the numbers. This is exactly the argument for the job: the assertion
+was deliberately written as a gate rather than a pinned figure, and had it
+pinned 0.8300 the build would have been red on a true result.
 
 ## [1.2.2] - 2026-08-30 - The figures a correction did not reach
 
