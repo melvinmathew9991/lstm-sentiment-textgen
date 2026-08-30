@@ -29,9 +29,9 @@ Append one entry per phase. Newest at the bottom. Do not rewrite history.
 | Class weight (pos) | 3.884 |
 | Vocab @ min_freq=2 | 4,083 on the 6,866-row training block · test OOV 5.68% |
 | — under the two-way split | 4,505 · test OOV 5.23% (Phase 1; the FR-6 split is unchanged) |
-| Alice tokens | 27,429 after Gutenberg strip (30,674 before) · train 24,687 / val 2,742 |
+| Alice tokens | 27,429 after Gutenberg strip (30,674 before) · train 24,687 / val 1,371 / test 1,371 |
 | Alice vocab | **2,436** train-only @ min_freq=1 → **perplexity baseline 2,436** (ln V = 7.798) |
-| Text-gen windows | 27,409 (24,677 + 2,732) — each block windowed separately |
+| Text-gen windows | 27,399 (24,677 + 1,361 + 1,361) — each block windowed separately |
 | Text-gen storage | 0.22 MB lazy int64 · reference allocated 931 MB of one-hot |
 
 > Figures above are **post-Phase-1 measured values**. Earlier drafts of `Phases.md` quoted 1,470 vocab /
@@ -1324,6 +1324,72 @@ A held-out block for text generation. Same defect class, but it rebuilds the
 text-gen vocabulary and moves the 2,436 / 7.7981-nat uniform baseline that the
 entire D2 demonstration — the centrepiece of this project — is quoted against.
 That trade deserves its own decision, not a footnote in a cleanup.
+
+---
+
+## v1.2.0 — A held-out block for text generation ✅ (2026-08-30)
+
+The last open item, and the one I had priced wrong.
+
+### What it was
+
+Text generation had no held-out block. Perplexity was measured on the same
+split early stopping selected against — the exact defect fixed for sentiment in
+v0.8.1, still live on the other task. S4 asked for "validation perplexity", so
+the label was honest, but an honest label on a selected number is still a
+selected number.
+
+```
+validation  186.27     the block early stopping saw
+test        267.54     held out, scored once
+            +44%       the selection effect, now visible
+```
+
+267.54 still clears the S4 gate of ≤ 400 against the same 2,436 floor.
+
+### The mispricing, which is the interesting part
+
+Twice — in `PARITY.md` §6 and in the Phase 9 entry — I recorded this as
+deliberately deferred because "a third block rebuilds the text-gen vocabulary
+and moves the 2,436 / 7.7981-nat baseline the D2 demonstration is quoted
+against". That was stated as fact. It was an assumption: that the block had to
+come out of **train**.
+
+Measuring three schemes before writing code:
+
+```
+scheme        train    val   test   vocab    ln V
+90/10 (old)  24,687  2,742      0   2,436  7.7981
+80/10/10     21,945  2,742  2,742   2,288  7.7354   <- what I assumed
+90/5/5       24,687  1,371  1,371   2,436  7.7981   <- identical training block
+```
+
+At 90/5/5 the test block comes out of what was *already* held out. The training
+block is byte-identical, so V, ln V and every entropy figure in `PARITY.md` §3
+are untouched. A change I had twice described as invalidating the project's
+centrepiece touches **one number**.
+
+The lesson is not about splits. I wrote "this would move the baseline" into two
+published documents without checking, and it read as a measurement because
+everything else around it was one. The same sentence with "I have not checked
+whether a different split avoids this" would have been honest and would have
+got the work done a phase earlier.
+
+### Decisions
+1. **90/5/5, not 80/10/10.** The held-out region stays the size it always was
+   and is simply divided in two. Smaller blocks mean noisier early stopping and
+   a noisier test figure — 1,361 windows each — but that is a far smaller cost
+   than moving the baseline every entropy claim is quoted against.
+2. **`test_fraction` defaults to 0.05 and is validated separately** from
+   `val_fraction`, with its own error message, so a caller who sets one and
+   forgets the other is told which.
+3. **The control test asserts the training blocks are identical** between
+   `split_tokens(tokens, 0.10, 0.0)` and `split_tokens(tokens, 0.05, 0.05)`.
+   That equality is the entire justification for the design, so it is asserted
+   rather than left in a docstring.
+
+### Audit
+444 tests. 21 pass · 0 fail · 0 skip.
 
 ### The project is done
 Ten phases, eleven reference defects closed, two of our own found and fixed by

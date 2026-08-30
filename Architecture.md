@@ -209,7 +209,7 @@ BLOCK split BEFORE windowing          contiguous 90/10 on real prose
   [FR-7 · fixes D6]                   no window straddles the boundary
         │
         ▼
-WindowDataset(seq_len=10, stride=1)   27,409 windows (24,677 + 2,732)
+WindowDataset(seq_len=10, stride=1)   27,399 windows (24,677 + 1,361 + 1,361)
         │                             lazy slices of one 1-D tensor: 0.22 MB
         │                             ── dense (N,10) int64 would be 2.19 MB
         │                             ── reference one-hot was 931 MB

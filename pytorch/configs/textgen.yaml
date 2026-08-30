@@ -9,7 +9,9 @@ data:
   text: ../../data/alice.txt
   seq_len: 10
   stride: 1
-  val_fraction: 0.10      # trailing block of STRIPPED prose (standard LM
+  val_fraction: 0.05      # trailing block of STRIPPED prose (standard LM
+  test_fraction: 0.05     # scored once; carved from the held-out slice, not
+                          # from train, so V stays 2,436 and ln V stays 7.7981
                           # practice). Safe only because strip_gutenberg removed
                           # the licence text that used to occupy this slice (D6).
   min_freq: 1             # train-only vocab = 2,436. Measured 2026-08-29:

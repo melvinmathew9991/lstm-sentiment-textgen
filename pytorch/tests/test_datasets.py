@@ -181,9 +181,30 @@ def test_label_names_order() -> None:
 
 def test_split_tokens_is_contiguous_and_complete() -> None:
     tokens = [str(i) for i in range(100)]
-    train, val = split_tokens(tokens, 0.10)
-    assert len(train) == 90 and len(val) == 10
-    assert train + val == tokens
+    train, val, test = split_tokens(tokens, 0.05, 0.05)
+    assert (len(train), len(val), len(test)) == (90, 5, 5)
+    assert train + val + test == tokens, "blocks must tile the stream in order"
+
+
+def test_the_test_block_is_carved_from_held_out_never_from_train() -> None:
+    """The design choice that made a held-out block cost nothing.
+
+    At 90/5/5 the training block is byte-identical to the old 90/10 one, so the
+    vocabulary stays at 2,436 and the uniform baseline stays at ln V = 7.7981 --
+    the number the whole D2 demonstration is quoted against. Taking test out of
+    train instead would have moved it to 2,288 / 7.7354.
+    """
+    tokens = [str(i) for i in range(100)]
+    two_way_train, _, empty = split_tokens(tokens, 0.10, 0.0)
+    three_way_train, _, _ = split_tokens(tokens, 0.05, 0.05)
+    assert two_way_train == three_way_train
+    assert empty == []
+
+
+@pytest.mark.parametrize("fraction", [1.0, -0.1, 1.5])
+def test_bad_test_fraction_rejected(fraction: float) -> None:
+    with pytest.raises(DataError, match="test_fraction"):
+        split_tokens([str(i) for i in range(100)], 0.05, fraction)
 
 
 @pytest.mark.parametrize("fraction", [0.0, 1.0, -0.1, 1.5])
@@ -234,17 +255,19 @@ def test_too_few_tokens_rejected() -> None:
 def test_no_window_straddles_the_split(mini_book: Path) -> None:
     """Windowing happens per block, after the split -- so context never leaks."""
     splits = prepare_textgen_data(mini_book, seq_len=10, min_freq=1)
-    assert len(splits.train) == splits.train.n_tokens - 10
-    assert len(splits.val) == splits.val.n_tokens - 10
+    for block in ("train", "val", "test"):
+        dataset = getattr(splits, block)
+        assert len(dataset) == dataset.n_tokens - 10, f"{block} window count"
     tokens = tokenize(load_corpus(mini_book))
-    assert len(splits.train) + len(splits.val) == len(tokens) - 20
+    # Three blocks, each losing seq_len windows at its own boundary.
+    assert len(splits.train) + len(splits.val) + len(splits.test) == len(tokens) - 30
 
 
 def test_textgen_vocab_built_from_train_only(mini_book: Path) -> None:
     splits = prepare_textgen_data(mini_book, seq_len=10, min_freq=1)
     tokens = tokenize(load_corpus(mini_book))
-    train_tokens, val_tokens = split_tokens(tokens, 0.10)
-    for token in set(val_tokens) - set(train_tokens):
+    train_tokens, val_tokens, test_tokens = split_tokens(tokens, 0.05, 0.05)
+    for token in (set(val_tokens) | set(test_tokens)) - set(train_tokens):
         assert token not in splits.vocab
 
 
@@ -289,9 +312,11 @@ def test_sentiment_measured_values(sentiment_splits) -> None:
 def test_textgen_measured_values(textgen_splits) -> None:
     t = textgen_splits
     assert t.n_tokens == 27_429
-    assert (t.train.n_tokens, t.val.n_tokens) == (24_687, 2_742)
+    assert (t.train.n_tokens, t.val.n_tokens, t.test.n_tokens) == (24_687, 1_371, 1_371)
+    # The training block is byte-identical to the old two-way 90/10 split, which
+    # is why V and the uniform baseline did not move when test was added.
     assert len(t.vocab) == 2_436  # train-only @ min_freq=1
-    assert len(t.train) + len(t.val) == 27_409  # 27,429 - 2 x seq_len
+    assert len(t.train) + len(t.val) + len(t.test) == 27_399  # 27,429 - 3 x seq_len
     # min_freq=1 => every training token earned an index
     assert int((t.train.ids == t.vocab.unk_index).sum()) == 0
 
@@ -300,9 +325,10 @@ def test_textgen_measured_values(textgen_splits) -> None:
 def test_textgen_memory_footprint(textgen_splits) -> None:
     """D9: 707 MB of one-hot becomes 0.22 MB of lazily-sliced indices."""
     t = textgen_splits
-    storage = t.train.storage_nbytes() + t.val.storage_nbytes()
-    dense = t.train.dense_nbytes() + t.val.dense_nbytes()
-    onehot = t.train.onehot_nbytes(len(t.vocab)) + t.val.onehot_nbytes(len(t.vocab))
+    blocks = (t.train, t.val, t.test)
+    storage = sum(b.storage_nbytes() for b in blocks)
+    dense = sum(b.dense_nbytes() for b in blocks)
+    onehot = sum(b.onehot_nbytes(len(t.vocab)) for b in blocks)
     assert storage / 1e6 == pytest.approx(0.22, abs=0.01)
     assert dense / 1e6 == pytest.approx(2.19, abs=0.01)
     assert onehot / storage > 2_000
