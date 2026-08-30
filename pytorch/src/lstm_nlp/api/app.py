@@ -28,6 +28,7 @@ from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
 from pathlib import Path
 
+import torch
 from fastapi import FastAPI, Request, status
 from fastapi.responses import JSONResponse
 
@@ -82,23 +83,59 @@ def default_runs_dir() -> Path:
     return Path(configured) if configured else PACKAGE_ROOT / "runs"
 
 
+def is_smoke_run(checkpoint: Path) -> bool:
+    """True if a checkpoint came from a truncated ``--max-steps`` run.
+
+    Reading the file is worth the cost. Running the documented smoke command
+    (``Rules.md`` B7) writes a run directory like any other, and because
+    resolution picks the newest, that half-trained model silently became the
+    one the API served -- measured at macro-F1 0.6997 against the real run's
+    0.8485, with nothing anywhere saying so.
+
+    A checkpoint too old to carry the marker is treated as a real run: the
+    marker's absence is ambiguous for those, and refusing to serve a model
+    someone trained last month is the worse failure.
+
+    Args:
+        checkpoint: Path to a ``best.pt``.
+
+    Returns:
+        Whether the run was truncated.
+    """
+    try:
+        payload = torch.load(checkpoint, map_location="cpu", weights_only=False)
+    except Exception:  # noqa: BLE001 - an unreadable file is not a smoke run;
+        return False   # load_checkpoint reports it properly a moment later.
+    return bool(isinstance(payload, dict) and payload.get("train", {}).get("max_steps"))
+
+
 def latest_checkpoint(task: str) -> Path | None:
-    """Newest ``best.pt`` for ``task``, or ``None`` if the model is untrained.
+    """Newest real ``best.pt`` for ``task``, or ``None`` if there is none.
 
     Run directories are timestamped (``20260829T211240``), so lexical order is
     chronological order and no filesystem mtime is consulted.
+
+    Smoke runs are skipped rather than served. An explicit
+    ``LSTM_NLP_<TASK>_CKPT`` still points wherever it is told -- naming a file
+    is a decision, and this function's job is only to stop an accident.
 
     Args:
         task: ``"sentiment"`` or ``"textgen"``.
 
     Returns:
-        The path, or ``None`` when nothing has been trained.
+        The path, or ``None`` when nothing usable has been trained.
     """
     task_dir = default_runs_dir() / task
     if not task_dir.is_dir():
         return None
-    found = sorted(task_dir.glob("*/best.pt"))
-    return found[-1] if found else None
+    for candidate in reversed(sorted(task_dir.glob("*/best.pt"))):
+        if is_smoke_run(candidate):
+            logger.warning(
+                "skipping %s: --max-steps smoke run, not a trained model", candidate
+            )
+            continue
+        return candidate
+    return None
 
 
 def resolve_checkpoint(task: str, env_var: str) -> Path | None:

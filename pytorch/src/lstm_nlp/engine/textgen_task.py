@@ -227,6 +227,9 @@ def train_textgen(cfg: TextGenConfig, max_steps: int | None = None) -> Path:
             "best_epoch": history.best_epoch,
             "stopped_early": history.stopped_early,
             "epochs_run": len(history.epochs),
+            # Non-None marks a truncated smoke run, so checkpoint
+            # resolution can refuse to serve it (Rules.md B7).
+            "max_steps": max_steps,
         },
     )
     history.save(run_dir / "history.json")
