@@ -539,10 +539,10 @@ Not a traceback anywhere.
    the API and frontend will use. Deliberate: one place decides what a legal
    temperature is, and the exit code reflects where the failure occurred.
 5. **The `slow` marker forced a CI change.** Adding `-m 'not slow'` as the
-   default would have made CI's `pytest -v` silently stop running the training
-   tests — a green build that tests less than it did the day before is worse
-   than a red one. CI now runs `pytest -v -m ""` explicitly, with a comment
-   saying why.
+   default would have made CI's `pytest -v` silently stop *selecting* the
+   training tests — a green build that tests less than it did the day before is
+   worse than a red one. CI now runs `pytest -v -m ""` explicitly, with a
+   comment saying why. See the correction below for what this does **not** buy.
 
 ### Surprises / corrections
 - **The stranded changelog entries.** `scripts/audit.py` and two doc fixes
@@ -557,8 +557,95 @@ Not a traceback anywhere.
   recording, because "add `type=positive_float` to argparse" is the obvious
   wrong fix and would have created a second definition of a legal temperature.
 
+### The CI skip gap — found by checking, not by assuming
+
+I wrote in the changelog and in decision 5 that `-m ""` means the training
+tests "are not skipped" in CI. Then I opened the CI log instead of trusting my
+own sentence. Run 33286431087, `test (py3.10)`:
+
+```
+255 passed, 51 skipped in 12.09s
+```
+
+Locally the same command is 306 passed, 0 skipped. The 51:
+
+```
+test_predictor.py            21   all of them
+test_trained_sentiment.py    11   all of them
+test_trained_textgen.py      10   all of them
+test_cli_integration.py       9   the subprocess ones
+```
+
+`-m ""` removes *marker deselection*. It cannot conjure a checkpoint, and
+`pytorch/runs/` is gitignored, so everything that loads a trained model skips at
+runtime instead. Twelve seconds should have told me that on its own: the suite
+takes far longer than that here.
+
+**So no headline number in this repository has ever been verified by CI.**
+macro-F1 0.8485, perplexity 223.54, the entropy curve that is the whole D2
+proof — all of them rest on my machine and a fixed seed. That is a defensible
+position (weights should not be tracked, and training in CI costs minutes), but
+it is only defensible while it is *written down*. The version of this file I
+nearly committed asserted the opposite.
+
+What does run in CI: the D1 checker (7 passed) and every test needing no
+checkpoint. The defect this phase closes is genuinely guarded on every push.
+
+### The PR title is the commit subject
+
+The audit flagged `ffc2f5b Phase 5: CLI (#9)` as a non-conventional subject on
+`main`. A squash merge takes its subject from the **PR title**, not from the
+commits being squashed -- so a tidy branch history counts for nothing if the PR
+is titled like a heading. Every earlier phase passed by luck: I happened to
+title those PRs with the lead commit's conventional subject.
+
+Not fixed. Correcting it means rewriting a commit already on `main` and
+force-pushing a public branch, which is a worse trade than one imperfect
+subject line. **Standing rule from here: PR titles are conventional commit
+subjects.** Phase 6's is `feat(api): ...`, not `Phase 6: FastAPI service`.
+
+### The trailer that turned `main` red — and the rewrite
+
+`gh pr merge 10 --squash` appended this to the squash commit, unasked:
+
+```
+Co-authored-by: Melvin Mathew <meriatmelvin@gmail.com>
+```
+
+`Rules.md` §10 bans trailers outright, the audit enforces it, so the next audit
+run came back **20 pass · 1 warn · 1 FAIL** and CI run 33286891658 went red on
+`main`. The gate caught it within a minute of the merge, which is the entire
+argument for having an executable standard rather than a documented one.
+
+**Cause.** My local `user.email` was `meriatmelvin@gmail.com` while GitHub
+attributes the squash to `102222281+melvinmathew9991@users.noreply.github.com`.
+Two addresses, so GitHub concluded there were two people and credited the other
+one. PR #9, merged through the web UI, came out clean — which is why five phases
+of `gh`-free merges never exposed this.
+
+**Fix.** `git config user.email` set to the GitHub noreply address, so the two
+identities are one and no trailer is generated. Prevention beats detection here:
+the audit would keep catching it, once per merge, forever.
+
+**The rewrite, stated plainly.** A revert would not have worked — the audit reads
+commit *messages* across history, so the offending text would still be there and
+the gate would still fail. So the commit was amended, `main` force-pushed, and
+`v0.6.0` deleted and recreated on the clean commit. That is a rewrite of public
+history, done deliberately, on a solo repository with no other clones, affecting
+exactly one commit. `backup-before-rewrite-92bc441` holds the original.
+
+I am recording it rather than letting the amend erase it. A tidy history that
+quietly drops its own mistakes is the same failure as a changelog that quietly
+drops a skipped test: it makes the repository look better than the work was.
+
+### Deferred (`Rules.md` A6)
+**A `--max-steps` smoke train in CI**, producing a throwaway checkpoint so those
+51 tests execute. Two extra minutes per run, and it would convert the trained-
+model claims from reproducible-in-principle to checked-on-every-push. Phase 9.
+
 ### Audit
-**21 pass · 1 warn · 0 fail · 1 skip.** 306 tests (301 on the fast path).
+**21 pass · 1 warn · 0 fail · 1 skip.** 306 tests locally (301 on the fast
+path), 255 passed / 51 skipped in CI.
 The warn is "tags match completed phases": 5 tags for 6 completed phases, and it
 clears when `v0.6.0` lands on merge. I had written `22 pass · 0 warn` here before
 running it — a predicted number in the log, which is the A4 violation this file
