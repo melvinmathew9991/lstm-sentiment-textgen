@@ -791,3 +791,148 @@ metric without its baseline (C16). The temperature chart is the point of the
 phase: `POST /distribution` already returns entropy beside uniform entropy, so
 the page has to render the comparison rather than compute it.
 Branch `phase-7-frontend`, tag `v0.8.0`.
+
+---
+
+## Phase 7 — Streamlit frontend ✅ complete (2026-08-30)
+
+The presentation tier, and the phase where the project's central claim finally
+becomes something a person can *watch* rather than read.
+
+### The D2 lesson, now observable
+
+The generation page drives the text and the distribution chart from one slider.
+The dashed rule sits at `1/V`, and that rule is not decoration: it is exactly
+where the reference's sampler sat **at every temperature it was ever given**.
+Raising the slider to 2.0 sinks the bars visibly toward it. The user is
+watching the defect happen.
+
+That pairing is asserted, not just built —
+`test_temperature_changes_both_the_text_and_the_distribution` drives the real
+page against a real backend and requires that 0.1 and 2.0 produce both
+different entropy and different text. The reference would fail it on both
+counts, which is the point of writing it that way round.
+
+### Verified (real output)
+
+`AppTest` running the actual page scripts against a live `uvicorn`, nothing
+mocked. Backend down:
+
+```
+error[0]:
+  **Backend unreachable.** Nothing answered at `http://127.0.0.1:59999`.
+  Cause: [WinError 10061] No connection could be made because the target
+         machine actively refused it
+  Start it with:
+      uvicorn lstm_nlp.api.app:app --port 59999
+
+exceptions: 0
+```
+
+That is S18: no traceback, no spinner, the URL that was tried and the command
+that fixes it — with the port taken from the configuration, not a literal.
+
+### Measured
+
+```
+NFR-9  slider -> updated result   median 260 ms   max 284 ms   budget 2000 ms
+fast test path                    385 tests       34.7 s       budget 60 s
+```
+
+### The chart, decided rather than styled
+
+Form first, colour last:
+
+- **Horizontal bars.** Magnitude by identity, twelve word-shaped labels.
+- **One series, one colour.** Shading bars by their own value would
+  double-encode length as hue and imply a rank the words do not have.
+- **No legend** — furniture for a single series; the title names it.
+- **Values in muted ink.** Marks carry identity; text wears text tokens.
+- **Dashing is reserved for the threshold.** Gridlines are solid hairlines, so
+  the one dashed line in the chart can only mean "uniform".
+
+### Built
+- `settings.py`, `api_client.py`, `theme.py`, `components.py`, `charts.py`,
+  `app.py`, `pages/1_sentiment.py`, `pages/2_generation.py`, `.streamlit/config.toml`.
+- `tests/test_frontend.py` — 44 tests.
+
+### Decisions
+1. **Three error types, not one.** A dead backend, a missing model and a
+   rejected input need three different UI responses (full-page banner,
+   page-level notice, message beside the control). Collapsing them would force
+   every page to re-derive the distinction from a status code, which is how a
+   "backend down" banner ends up appearing because someone typed an empty
+   string.
+2. **The C15 gate is a static scan, not an import check.** Importing a module
+   proves only that *that* path stayed clean; parsing every file under
+   `frontend/` also covers the branch that only runs when a model is missing.
+   It carries a negative control, like the D1 checker.
+3. **`ApiClient` takes an injectable transport.** The tests use
+   `httpx.MockTransport` and therefore exercise the real status handling and
+   JSON decoding, rather than a stand-in that would agree with whatever the
+   code happened to do.
+4. **`metric_with_baseline` takes `baseline` as a required argument.** C16
+   enforced by signature. A rule that depends on remembering an optional
+   argument is a rule the third new page breaks.
+5. **The chart data comes from the backend.** `POST /distribution` returns the
+   exact tensor the sampler draws from. Computing it in the frontend would have
+   been easy and would have recreated D2's shape: a chart free to disagree with
+   the sampler it claims to depict.
+
+### Surprises / corrections
+- **A palette token failed its contrast floor, and I only knew because I
+  computed it.** `Design.md` specified `#8A94A2` for reference marks; measured
+  against the chart surface that is **2.86:1**, under the 3:1 a non-text mark
+  needs. Changed to `#7B8592` (3.49:1, still gray at OKLCH chroma 0.023) and
+  the measurement written into `Design.md` §2. The tooling for this had no
+  `node`, so the validator was ported to Python rather than skipped — the
+  alternative was eyeballing it, which is what produced the wrong value.
+- **My chart test looked in the wrong half of the spec.** I asserted the
+  baseline row lived on `layer[*].data.values`; Altair hoists inline data into
+  a top-level `datasets` map keyed by content hash. The chart was right and the
+  test was wrong — fourth time this project a test has caught my expectation
+  rather than the implementation.
+- **`use_container_width` is deprecated with a removal date already in the
+  past.** Surfaced only because the NFR-9 measurement ran the page enough times
+  to print the warning. Replaced with `width="stretch"`.
+- **The tiny-checkpoint fixture was about to exist twice.** The frontend suite
+  needed what `test_api.py` had. Moved to `conftest.py` and both now share it:
+  two definitions of "a valid checkpoint tree" would eventually disagree about
+  what one is.
+
+### The dependency CI caught and I could not
+
+`streamlit` and `altair` are imported by `frontend/` and by the suite, and were
+declared **nowhere**. `Rules.md` §2 has listed them as required since Phase 0;
+`requirements.txt` never caught up, because no phase before this one imported
+them. Locally everything passed — the packages were already on the machine. CI
+installed from `requirements.txt` into a clean environment and collection died:
+
+```
+ModuleNotFoundError: No module named 'streamlit'
+```
+
+An undeclared import is invisible until someone installs from scratch, which is
+the one environment a developer never uses. This is the mirror image of the
+Phase 5 finding: there, CI silently tested *less* than I thought; here, CI
+tested something my machine could not. Both come from the same place — assuming
+the environment I can see is the environment that matters.
+
+`tests/test_dependencies.py` is the check for the shape rather than the
+instance (`Rules.md` §11.2). Verified against the real defect by removing
+`streamlit` from `requirements.txt` in memory and confirming it fails with
+`streamlit (imported by frontendpp.py) -> expected 'streamlit'`.
+
+### Audit
+**21 pass · 2 warn · 0 fail · 0 skip.** First run with **no skips** — the
+frontend-purity check (C15) has been skipping since Phase 0 for want of a
+`frontend/` to scan. 407 tests (393 fast). In CI: 354 passed, 53 skipped, up
+from 302 passed last phase.
+
+### Next: Phase 8 — Parity & reporting
+`PARITY.md`: the PyTorch metrics against the frozen Keras reference, with every
+delta explained, and all eleven defects marked closed (D11, S16). The numbers
+already exist across these entries; the work is assembling them honestly,
+including the places the rebuild is *not* better — the negation case that moves
+0.977 → 0.751 without crossing the boundary is the obvious one.
+Branch `phase-8-parity`, tag `v0.9.0`.

@@ -357,7 +357,7 @@ Candidates, in rough value order:
 | P4 Sampling | ✅ **done** 2026-08-29 | **D2**, D10 | entropy 1.03 -> 7.76 monotonic · 273 tests |
 | P5 CLI | ✅ **done** 2026-08-30 | **D1**, D10 | 4 commands from `C:\Users` · 306 tests |
 | P6 FastAPI backend | ✅ **done** 2026-08-30 | — | 6 routes + 422/503 · /predict 2.3 ms · /generate 57 ms · 355 tests |
-| P7 Streamlit frontend | ⬜ | — | S17 · S18 · S19 · temperature visible |
+| P7 Streamlit frontend | ✅ **done** 2026-08-30 | — | S17 · S18 · S19 · slider 260 ms · audit 0 skip · 407 tests |
 | P8 Parity | ⬜ | D11 | `PARITY.md`, 11/11 closed |
 | P9 Hardening | ⬜ optional | — | — |
 

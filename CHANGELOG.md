@@ -8,9 +8,70 @@ Defect IDs (D1-D11) refer to `PRD.md` section 1.1.
 ## [Unreleased]
 
 ### Planned
-- Phase 7: Streamlit frontend
 - Phase 8: parity report
 - Phase 9: hardening
+
+## [0.8.0] - 2026-08-30 - Phase 7: Streamlit frontend
+
+Two pages over the HTTP contract, holding no model state. The generation page
+is the point of the phase: the temperature slider drives the generated text and
+a chart of the next-word distribution at the same time, with the uniform
+baseline drawn on -- so the relationship the reference merely claimed is
+watched instead.
+
+### Added
+- `frontend/settings.py`: backend URL and timeouts from the environment (FR-36).
+- `frontend/api_client.py`: the only module that speaks HTTP. Transport
+  failures become three typed errors, because the UI must answer them
+  differently -- a dead backend is a full-page banner, a missing model is a
+  page-level notice, a rejected input is a message beside the control.
+- `frontend/theme.py`, `frontend/components.py`, `frontend/charts.py`,
+  `frontend/app.py`, `frontend/pages/{1_sentiment,2_generation}.py`,
+  `frontend/.streamlit/config.toml`.
+- `POST /distribution` is what the chart renders. The frontend asks the backend
+  for the distribution rather than deriving it: a chart computed *beside* the
+  sampler instead of *from* it is free to disagree with it, which is the exact
+  shape of D2.
+- `tests/test_frontend.py`: 44 tests. The C15 purity scan (S19) parses every
+  file under `frontend/` rather than importing it, so it also covers branches
+  the suite never executes. Client tests inject `httpx.MockTransport`; six live
+  tests run the real Streamlit pages against a real `uvicorn` process.
+- `tiny_runs` fixture moved into `conftest.py` and shared with the API suite --
+  two definitions of "a valid checkpoint tree" would eventually disagree.
+- `tests/test_dependencies.py`: every third-party import under `src/`,
+  `frontend/` and `tests/` must be declared in `requirements.txt` (Rules.md
+  section 11.2 -- a new invariant means a new check).
+- 52 tests (**407 total**; 393 on the default fast path, 33.7s).
+
+### Measured
+
+    NFR-9  slider move -> updated result   median 260 ms   max 284 ms   budget 2000 ms
+
+Contrast, computed rather than eyeballed, against the chart surface:
+
+    accent  /surface   4.26:1 light   5.35:1 dark    floor 3:1
+    neutral /surface   3.49:1 light   3.70:1 dark    floor 3:1
+
+### Fixed
+- **The light `neutral` token failed its contrast floor.** `Design.md` gave
+  `#8A94A2`, which measures 2.86:1 against the chart surface -- under the 3:1 a
+  reference mark needs to be legible. Now `#7B8592` at 3.49:1, still
+  unambiguously gray (OKLCH chroma 0.023). The measurement is recorded in
+  `Design.md` section 2 rather than the value being quietly swapped.
+- `use_container_width` is deprecated with a removal date that has already
+  passed; replaced with `width="stretch"`.
+- **`streamlit` and `altair` were imported but never declared.** Rules.md
+  section 2 had listed them as required since Phase 0; `requirements.txt` had
+  never caught up, because no phase before this one imported them. They worked
+  locally and failed collection on a clean CI install. Now declared there and
+  as a `frontend` extra, so installing the backend does not drag Streamlit in.
+  `altair` is named explicitly rather than left transitive through Streamlit:
+  `charts.py` imports it directly, and a direct import resting on someone
+  else's dependency tree breaks the day they drop it.
+
+### Note
+The audit reports **0 skip** for the first time. Its frontend-purity check
+(C15) has been skipping since Phase 0 because there was no `frontend/` to scan.
 
 ## [0.7.0] - 2026-08-30 - Phase 6: FastAPI service
 
