@@ -98,6 +98,7 @@ def cmd_eval(args: argparse.Namespace) -> int:
     splits = prepare_sentiment_data(
         cfg.data.csv,
         test_size=cfg.data.test_size,
+        val_size=cfg.data.val_size,
         split_seed=cfg.data.split_seed,
         stratify=cfg.data.stratify,
         min_freq=cfg.data.min_freq,
@@ -107,8 +108,11 @@ def cmd_eval(args: argparse.Namespace) -> int:
     device = resolve_device(cfg.device)
     model.to(device)
 
-    _, test_loader = build_loaders(splits, cfg.train.batch_size, cfg.seed)
-    report, _ = evaluate_report(model, test_loader, device)
+    _, val_loader, test_loader = build_loaders(splits, cfg.train.batch_size, cfg.seed)
+    # `--split` now selects a real block. Validation is the set early stopping
+    # saw; test is the one it did not, and is the only honest headline.
+    loader = val_loader if args.split == "val" else test_loader
+    report, _ = evaluate_report(model, loader, device)
     print(f"Metrics on the {args.split} split\n" + report.format())
     return EXIT_OK
 

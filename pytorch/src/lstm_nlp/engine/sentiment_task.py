@@ -68,11 +68,16 @@ def sentiment_metrics(logits: np.ndarray, targets: np.ndarray) -> dict[str, floa
 
 def build_loaders(
     splits: SentimentSplits, batch_size: int, seed: int, num_workers: int = 0
-) -> tuple[DataLoader, DataLoader]:
-    """Build train/test loaders with a seeded shuffle generator.
+) -> tuple[DataLoader, DataLoader, DataLoader]:
+    """Build train/val/test loaders with a seeded shuffle generator.
 
     The generator is explicit so shuffling is reproducible without touching the
     global RNG (``Rules.md`` §4).
+
+    Three loaders come back, in the order they may be used: train to fit, val to
+    select, test to report. Three rather than two so a caller cannot hand the
+    test loader to ``fit`` by accident -- which is precisely the defect this
+    shape replaced.
     """
     generator = torch.Generator()
     generator.manual_seed(seed)
@@ -80,11 +85,15 @@ def build_loaders(
         splits.train, batch_size=batch_size, shuffle=True, generator=generator,
         collate_fn=collate_sentiment, num_workers=num_workers,
     )
+    val_loader = DataLoader(
+        splits.val, batch_size=batch_size, shuffle=False,
+        collate_fn=collate_sentiment, num_workers=num_workers,
+    )
     test_loader = DataLoader(
         splits.test, batch_size=batch_size, shuffle=False,
         collate_fn=collate_sentiment, num_workers=num_workers,
     )
-    return train_loader, test_loader
+    return train_loader, val_loader, test_loader
 
 
 def evaluate_report(
@@ -121,12 +130,13 @@ def train_sentiment(cfg: SentimentConfig, max_steps: int | None = None) -> Path:
         test_size=cfg.data.test_size,
         split_seed=cfg.data.split_seed,
         stratify=cfg.data.stratify,
+        val_size=cfg.data.val_size,
         min_freq=cfg.data.min_freq,
         max_len=cfg.data.max_len,
     )
     logger.info(
-        "train %d / test %d  vocabulary %d  test OOV %.2f%%",
-        len(splits.train), len(splits.test), len(splits.vocab),
+        "train %d / val %d / test %d  vocabulary %d  test OOV %.2f%%",
+        len(splits.train), len(splits.val), len(splits.test), len(splits.vocab),
         100 * splits.test.unknown_rate(),
     )
 
@@ -146,7 +156,7 @@ def train_sentiment(cfg: SentimentConfig, max_steps: int | None = None) -> Path:
         logger.info("class weights: %s", [round(w, 3) for w in weights.tolist()])
     criterion = nn.CrossEntropyLoss(weight=weights)
 
-    train_loader, test_loader = build_loaders(
+    train_loader, val_loader, test_loader = build_loaders(
         splits, cfg.train.batch_size, cfg.seed, cfg.train.num_workers
     )
 
@@ -165,10 +175,13 @@ def train_sentiment(cfg: SentimentConfig, max_steps: int | None = None) -> Path:
         max_steps=max_steps,
     )
 
-    history: TrainingHistory = trainer.fit(train_loader, test_loader, cfg.train.epochs)
+    # Selection sees `val` and only `val`. `test` is scored once, below.
+    history: TrainingHistory = trainer.fit(train_loader, val_loader, cfg.train.epochs)
 
+    val_report, _ = evaluate_report(model, val_loader, device)
     report, _ = evaluate_report(model, test_loader, device)
-    print("\nTest metrics\n" + report.format() + "\n")
+    print("\nValidation metrics (early stopping selected on these)\n" + val_report.format() + "\n")
+    print("Test metrics (held out; scored once)\n" + report.format() + "\n")
 
     run_dir = Path(cfg.output.dir) / datetime.now().strftime("%Y%m%dT%H%M%S")
     run_dir.mkdir(parents=True, exist_ok=True)
@@ -187,6 +200,11 @@ def train_sentiment(cfg: SentimentConfig, max_steps: int | None = None) -> Path:
             "stopped_early": history.stopped_early,
             "epochs_run": len(history.epochs),
             "class_weights": weights.tolist() if weights is not None else None,
+            # Non-None marks a truncated smoke run. Recorded so a caller can
+            # tell one from a real run, and so checkpoint resolution can refuse
+            # to serve it (Rules.md B7).
+            "max_steps": max_steps,
+            "val_metrics": val_report.to_dict(),
         },
     )
     history.save(run_dir / "history.json")

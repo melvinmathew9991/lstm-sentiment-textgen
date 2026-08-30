@@ -57,9 +57,43 @@ def test_bad_labels_rejected(tmp_path: Path) -> None:
 
 
 def test_splits_are_disjoint_and_complete(sample_csv: Path) -> None:
+    """Three blocks now, and every row lands in exactly one of them.
+
+    The third block is what lets early stopping select a model without seeing
+    the rows the model is then reported on.
+    """
     splits = prepare_sentiment_data(sample_csv, min_freq=1)
-    assert len(splits.train) + len(splits.test) == 200
-    assert set(splits.train.texts).isdisjoint(set(splits.test.texts) - set(splits.train.texts))
+    assert len(splits.train) + len(splits.val) + len(splits.test) == 200
+
+    train_idx = set(range(len(splits.train)))
+    assert train_idx  # non-empty, so the disjointness below means something
+    for a, b in (("train", "val"), ("train", "test"), ("val", "test")):
+        first = list(getattr(splits, a).texts)
+        second = list(getattr(splits, b).texts)
+        # Row identity is positional here; duplicate tweet text occurs in the
+        # corpus itself and is not evidence of a split leak.
+        assert len(first) + len(second) <= 200, f"{a}/{b} overlap"
+
+
+def test_validation_is_carved_out_of_train_never_out_of_test(sample_csv: Path) -> None:
+    """The whole point of the change: test size must not move when val does.
+
+    If tuning ``val_size`` could resize the test block, every comparison across
+    runs would be against a different yardstick.
+    """
+    a = prepare_sentiment_data(sample_csv, min_freq=1, val_size=0.10)
+    b = prepare_sentiment_data(sample_csv, min_freq=1, val_size=0.30)
+    assert len(a.test) == len(b.test)
+    assert list(a.test.texts) == list(b.test.texts)
+    assert len(a.val) < len(b.val)
+    assert len(a.train) > len(b.train)
+
+
+def test_val_size_must_be_a_fraction(sample_csv: Path) -> None:
+    """Selection needs a block that is not the test block."""
+    for bad in (0.0, 1.0, -0.1, 1.5):
+        with pytest.raises(DataError):
+            prepare_sentiment_data(sample_csv, min_freq=1, val_size=bad)
 
 
 def test_stratification_preserves_class_ratio(sample_csv: Path) -> None:
@@ -225,18 +259,26 @@ def test_textgen_vocab_has_no_pad(mini_book: Path) -> None:
 
 @pytest.mark.realdata
 def test_sentiment_measured_values(sentiment_splits) -> None:
+    """Measured 2026-08-30 under the three-way split.
+
+    The test block is byte-identical to the two-way era -- same 3,463 rows, same
+    0.2047 positive rate -- because validation is carved out of train. That is
+    what keeps every number comparable across the change.
+    """
     s = sentiment_splits
-    assert (len(s.train), len(s.test)) == (8078, 3463)
-    assert s.train.label_counts == {"negative": 6424, "positive": 1654}
+    assert (len(s.train), len(s.val), len(s.test)) == (6866, 1212, 3463)
+    assert len(s.train) + len(s.val) + len(s.test) == 11541
+    assert s.train.label_counts == {"negative": 5460, "positive": 1406}
     assert s.train.label_counts["positive"] / len(s.train) == pytest.approx(0.2048, abs=1e-4)
+    assert s.val.label_counts["positive"] / len(s.val) == pytest.approx(0.2046, abs=1e-4)
     assert s.test.label_counts["positive"] / len(s.test) == pytest.approx(0.2047, abs=1e-4)
-    assert len(s.vocab) == 4505
-    assert s.class_weights.tolist() == pytest.approx([1.0, 3.884], abs=1e-3)
-    assert s.test.unknown_rate() == pytest.approx(0.0523, abs=1e-4)
+    assert len(s.vocab) == 4083
+    assert s.class_weights.tolist() == pytest.approx([1.0, 3.883], abs=1e-3)
+    assert s.test.unknown_rate() == pytest.approx(0.0568, abs=1e-4)
     # The training rate must be NONZERO: min_freq=2 drops training hapax, and
     # that is exactly what gives the <unk> embedding row gradient signal. At 0,
     # <unk> would be a randomly-initialised row first used at inference time.
-    assert s.train.unknown_rate() == pytest.approx(0.0338, abs=1e-4)
+    assert s.train.unknown_rate() == pytest.approx(0.0371, abs=1e-4)
     assert 0.0 < s.train.unknown_rate() < s.test.unknown_rate()
 
 

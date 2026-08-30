@@ -494,3 +494,71 @@ def test_generate_meets_its_latency_budget() -> None:
             n=5,
         )
     assert median < GENERATE_BUDGET_MS, f"/generate median {median:.1f} ms"
+
+
+# --------------------------------------------------------------------------- #
+# a truncated run must never be served
+# --------------------------------------------------------------------------- #
+
+
+def test_a_smoke_run_is_not_served(
+    tiny_runs: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A --max-steps run must not become the model the API serves.
+
+    Found by running the documented smoke command (Rules.md B7) during the
+    Phase 8 review: because resolution picks the newest run, the half-trained
+    model silently replaced the real one -- macro-F1 0.6997 against 0.8485,
+    with nothing anywhere saying so.
+
+    The smoke checkpoint here is *newer* than the real one, so a resolver that
+    ignored the marker would pick it and this test would fail.
+    """
+    import shutil
+
+    root = tmp_path / "runs"
+    shutil.copytree(tiny_runs, root)
+
+    real = root / "sentiment" / "20260101T000000" / "best.pt"
+    smoke_dir = root / "sentiment" / "29991231T235959"     # sorts last
+    smoke_dir.mkdir(parents=True)
+    payload = torch.load(real, map_location="cpu", weights_only=False)
+    payload["train"] = {**payload.get("train", {}), "max_steps": 3}
+    torch.save(payload, smoke_dir / "best.pt")
+
+    monkeypatch.setenv(app_module.ENV_RUNS_DIR, str(root))
+    resolved = app_module.latest_checkpoint("sentiment")
+
+    assert resolved is not None, "the real run must still be found"
+    assert resolved.parent.name == "20260101T000000", (
+        f"resolution picked {resolved.parent.name}; a --max-steps run must be skipped"
+    )
+
+
+def test_the_smoke_marker_is_what_makes_the_difference(
+    tiny_runs: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Negative control: without the marker, the newest run *is* chosen.
+
+    Otherwise the test above would pass even if resolution simply always
+    returned the oldest run, which would be a different bug.
+    """
+    import shutil
+
+    root = tmp_path / "runs"
+    shutil.copytree(tiny_runs, root)
+    newer = root / "sentiment" / "29991231T235959"
+    newer.mkdir(parents=True)
+    shutil.copy(root / "sentiment" / "20260101T000000" / "best.pt", newer / "best.pt")
+
+    monkeypatch.setenv(app_module.ENV_RUNS_DIR, str(root))
+    assert app_module.latest_checkpoint("sentiment").parent.name == "29991231T235959"
+
+
+def test_an_explicit_checkpoint_is_still_honoured(
+    tiny_runs: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Naming a file is a decision; the guard only stops an accident."""
+    explicit = tiny_runs / "sentiment" / "20260101T000000" / "best.pt"
+    monkeypatch.setenv(app_module.ENV_SENTIMENT_CKPT, str(explicit))
+    assert app_module.resolve_checkpoint("sentiment", app_module.ENV_SENTIMENT_CKPT) == explicit

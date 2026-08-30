@@ -72,6 +72,9 @@ STALE_FIGURES = {
     "27,419": "windows -- full-corpus count; correct value is 27,409 (two blocks)",
     "707 MB": "hypothetical one-hot; the reference actually allocated 931 MB",
     "961,214": "textgen params at the old vocab; correct value is 1,333,124",
+    "0.8485": "sentiment macro-F1 selected on the test split; held-out value is 0.8391",
+    "0.8972": "sentiment accuracy selected on the test split; held-out value is 0.8926",
+    "0.9366": "sentiment ROC-AUC selected on the test split; held-out value is 0.9303",
 }
 
 BANNED_IMPORTS = {

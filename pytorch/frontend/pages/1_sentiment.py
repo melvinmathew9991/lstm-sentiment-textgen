@@ -38,10 +38,16 @@ from frontend.components import (
 from frontend.theme import palette
 
 #: The D3 demonstration, one click away.
+#:
+#: Two of these are the canonical pair. The third is here because on the
+#: Phase 8 model the canonical pair *moves* (0.984 -> 0.900) without crossing
+#: the boundary, while "service was not good" crosses outright (0.806 ->
+#: 0.145). Showing only the pair that flips would be a demo; showing one that
+#: moves and one that flips is the truth about what the model does.
 PRESETS = [
     "the flight was great",
     "the flight was not great",
-    "thanks for the quick rebooking",
+    "service was not good",
 ]
 
 #: Majority-class accuracy on the airline corpus (79.53% negative).
@@ -118,7 +124,7 @@ if classify:
     with right:
         metric_with_baseline(
             "model test accuracy",
-            "0.8972",
+            "0.8926",
             f"{MAJORITY_BASELINE:.4f} (always answer negative)",
         )
         st.caption(

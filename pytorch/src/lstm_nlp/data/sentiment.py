@@ -28,9 +28,19 @@ REQUIRED_COLUMNS = ("airline_sentiment", "text")
 
 @dataclass(frozen=True)
 class SentimentSplits:
-    """Everything the trainer needs, with the vocabulary built from train only."""
+    """Everything the trainer needs, with the vocabulary built from train only.
+
+    Three blocks, not two. ``val`` is what early stopping and best-weight
+    selection are allowed to see; ``test`` is scored exactly once, at the end.
+    Until Phase 8 the trainer passed ``test`` as its validation loader, so the
+    reported macro-F1 was the maximum over every epoch's score on the very rows
+    it was reported for -- measured at **+0.0094** optimism against a proper
+    held-out estimate. A metric chosen on the set it is quoted for is not a
+    held-out metric, whatever the variable is called.
+    """
 
     train: SentimentDataset
+    val: SentimentDataset
     test: SentimentDataset
     vocab: Vocab
     class_weights: torch.Tensor
@@ -157,27 +167,44 @@ def prepare_sentiment_data(
     csv_path: str | Path,
     *,
     test_size: float = 0.30,
+    val_size: float = 0.15,
     split_seed: int = 10,
     stratify: bool = True,
     min_freq: int = 2,
     max_len: int = 30,
 ) -> SentimentSplits:
-    """Load, split, build the vocabulary, and wrap both splits as datasets.
+    """Load, split three ways, build the vocabulary, and wrap each block.
 
     The order is deliberate and is the fix for D7: **split first, then build the
     vocabulary from the training rows only.**
 
+    The test block is carved off first, with ``test_size`` and ``split_seed``
+    unchanged, so it holds exactly the rows it always did and results stay
+    comparable across this change. Validation is then taken out of what
+    remains, never out of test -- which is the point: the model may be selected
+    on ``val`` and is scored once on ``test``.
+
     Args:
         csv_path: Path to the sentiment CSV.
-        test_size: Test fraction.
+        test_size: Test fraction of the whole dataset.
+        val_size: Validation fraction **of the training block**, not of the
+            whole dataset, so changing it never moves the test rows.
         split_seed: Split RNG seed; pinned at 10 to match the frozen reference.
         stratify: Preserve the class ratio across splits.
         min_freq: Minimum training frequency for a token to earn an index.
         max_len: Truncation length (p99 of this data is 30 tokens).
 
     Returns:
-        Train/test datasets, the vocabulary, and class weights.
+        Train/val/test datasets, the vocabulary, and class weights.
+
+    Raises:
+        DataError: If ``val_size`` is not a fraction strictly between 0 and 1.
     """
+    if not 0.0 < val_size < 1.0:
+        raise DataError(
+            f"val_size must be a fraction in (0, 1), got {val_size}. Model "
+            f"selection needs a block that is not the test block."
+        )
     frame = load_sentiment_frame(csv_path)
     texts = frame["clean"].tolist()
     labels = frame["airline_sentiment"].astype(int).tolist()
@@ -189,10 +216,23 @@ def prepare_sentiment_data(
         stratify=labels if stratify else None,
     )
 
-    train_texts = [texts[i] for i in train_idx]
-    train_labels = [labels[i] for i in train_idx]
+    pool_texts = [texts[i] for i in train_idx]
+    pool_labels = [labels[i] for i in train_idx]
     test_texts = [texts[i] for i in test_idx]
     test_labels = [labels[i] for i in test_idx]
+
+    # Validation comes out of the training pool. Selection may see this; it may
+    # never see `test`.
+    inner_idx, val_idx = train_test_split(
+        range(len(pool_texts)),
+        test_size=val_size,
+        random_state=split_seed,
+        stratify=pool_labels if stratify else None,
+    )
+    train_texts = [pool_texts[i] for i in inner_idx]
+    train_labels = [pool_labels[i] for i in inner_idx]
+    val_texts = [pool_texts[i] for i in val_idx]
+    val_labels = [pool_labels[i] for i in val_idx]
 
     # ---- the D7 fix: counts come from training rows and nowhere else ----
     vocab = Vocab.build(
@@ -201,6 +241,7 @@ def prepare_sentiment_data(
 
     return SentimentSplits(
         train=SentimentDataset(train_texts, train_labels, vocab, max_len),
+        val=SentimentDataset(val_texts, val_labels, vocab, max_len),
         test=SentimentDataset(test_texts, test_labels, vocab, max_len),
         vocab=vocab,
         class_weights=compute_class_weights(train_labels),

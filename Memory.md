@@ -27,7 +27,8 @@ Append one entry per phase. Newest at the bottom. Do not rewrite history.
 | Sentiment rows | 11,541 · 9,178 neg / 2,363 pos · **1 = positive** |
 | Test split | 20.47% positive → **accuracy baseline 0.7953, macro-F1 baseline 0.4430** |
 | Class weight (pos) | 3.884 |
-| Vocab @ min_freq=2 | 4,505 (train-only) · test OOV 5.23% |
+| Vocab @ min_freq=2 | 4,083 on the 6,866-row training block · test OOV 5.68% |
+| — under the two-way split | 4,505 · test OOV 5.23% (Phase 1; the FR-6 split is unchanged) |
 | Alice tokens | 27,429 after Gutenberg strip (30,674 before) · train 24,687 / val 2,742 |
 | Alice vocab | **2,436** train-only @ min_freq=1 → **perplexity baseline 2,436** (ln V = 7.798) |
 | Text-gen windows | 27,409 (24,677 + 2,732) — each block windowed separately |
@@ -269,9 +270,14 @@ Result: **21 pass · 1 warn · 0 fail · 1 skip**. The warn is the dirty working
 
 ```
                     value    baseline      lift
-  accuracy         0.8972     0.7953   +0.1019
-  macro-F1         0.8485     0.4430   +0.4055
-  ROC-AUC          0.9366     0.5000   +0.4366
+  accuracy         0.8972     0.7953   +0.1019      <- superseded; corrected
+  macro-F1         0.8485     0.4430   +0.4055         in Phase 8 to 0.8391 /
+  ROC-AUC          0.9366     0.5000   +0.4366         0.8926 / 0.9303
+```
+
+*Superseded.* These figures were selected on the test split -- early stopping maximised macro-F1 on the same rows they were reported for. Corrected in Phase 8 to a held-out 0.8391 / 0.8926 / 0.9303; see `Memory.md`, Phase 8.
+
+```
 
   per class        prec     recall        F1    support
     negative      0.9487     0.9205    0.9344       2754
@@ -303,6 +309,9 @@ Result: **21 pass · 1 warn · 0 fail · 1 skip**. The warn is the dirty working
 - Two `float(tensor)` calls on grad-tracking tensors raised UserWarnings. Fixed with `.detach().item()`.
 
 ### Negation demonstration (S8)
+
+*Superseded: measured on the model selected against the test split. The Phase 8
+model, trained honestly, is re-measured in that entry.*
 ```
 the flight was great               positive  0.977
 the flight was not great           positive  0.751     gap 0.226
@@ -477,15 +486,15 @@ repository, which is a stronger check than a sibling directory on `D:`:
 $ python -m lstm_nlp.cli predict --ckpt <abs>/best.pt "the flight was not great"
   'the flight was not great'
     POSITIVE  p(positive)=0.751
-  model test accuracy 0.8972 (majority-class baseline 0.7953,
-                              macro-F1 0.8485 vs 0.4430)
+  model test accuracy 0.8972 (majority-class baseline 0.7953,   <- superseded,
+                              macro-F1 0.8485 vs 0.4430)           corrected in P8
 exit 0
 
 $ python -m lstm_nlp.cli eval --ckpt <abs>/best.pt --split test
                     value    baseline      lift
-  accuracy         0.8972     0.7953   +0.1019
-  macro-F1         0.8485     0.4430   +0.4055
-  ROC-AUC          0.9366     0.5000   +0.4366
+  accuracy         0.8972     0.7953   +0.1019    superseded, corrected in P8
+  macro-F1         0.8485     0.4430   +0.4055    superseded -> 0.8391
+  ROC-AUC          0.9366     0.5000   +0.4366    superseded -> 0.9303
 exit 0
 
 $ python -m lstm_nlp.cli generate --ckpt <abs>/best.pt --seed "alice was" --n-words 20
@@ -582,7 +591,8 @@ runtime instead. Twelve seconds should have told me that on its own: the suite
 takes far longer than that here.
 
 **So no headline number in this repository has ever been verified by CI.**
-macro-F1 0.8485, perplexity 223.54, the entropy curve that is the whole D2
+macro-F1 0.8485 (superseded; corrected to 0.8391 in Phase 8), perplexity
+223.54, the entropy curve that is the whole D2
 proof — all of them rest on my machine and a fixed seed. That is a defensible
 position (weights should not be tracked, and training in CI costs minutes), but
 it is only defensible while it is *written down*. The version of this file I
@@ -928,6 +938,138 @@ instance (`Rules.md` §11.2). Verified against the real defect by removing
 frontend-purity check (C15) has been skipping since Phase 0 for want of a
 `frontend/` to scan. 407 tests (393 fast). In CI: 354 passed, 53 skipped, up
 from 302 passed last phase.
+
+---
+
+## Pre-parity review ✅ (2026-08-30) — two defects of our own
+
+Run before Phase 8 because `PARITY.md` is about to publish these numbers, and a
+parity report is worth nothing if the figures on our side of the table were
+produced the way the reference's were.
+
+It found two. Both are the project's own signature failure: **a claim that was
+not measured the way it was described.**
+
+### 1. The model was selected on the test split
+
+`train_sentiment` passed the *test* loader to `fit`. Early stopping and
+best-weight restoration both maximised macro-F1 on the rows the headline was
+reported for. The history says it outright — epoch 6 is the maximum over 11
+evaluations, and its numbers are exactly the published ones:
+
+```
+ ep  val_macro_f1
+  3     0.8366
+  6     0.8485   <- selected on test, so superseded; corrected to 0.8391
+  8     0.8451
+ 11     0.8386
+```
+
+I measured the cost rather than asserting it was small: a proper three-way
+split, validation carved out of train, test scored once.
+
+```
+                      macro-F1   accuracy   ROC-AUC
+  superseded (on test)  0.8485     0.8972    0.9366   <- corrected below
+  held out, scored once 0.8391     0.8926    0.9303
+  optimism             +0.0094    +0.0046   +0.0063
+```
+
+Retraining under the fixed protocol reproduced the audit experiment to four
+decimals — 0.8391 / 0.8926 / 0.9303 — which is its own small reassurance about
+determinism.
+
+**The gate is untouched.** 0.8391 still clears the ≥ 0.75 target against 0.4430,
+and the rebuild's advantage over the reference is not in question. What changed
+is that the number now means what it says. Two honest caveats: the fixed model
+trains on 15% fewer rows, so part of the drop is lost data rather than lost
+optimism; and the vocabulary shrinks to 4,083, which costs a little accuracy on
+its own.
+
+**Where the spec was complicit.** FR-13 asks for early stopping on "validation
+macro-F1". FR-6 defines only train/test. No document ever defined a validation
+set — the code faithfully implemented an underspecified design, and the variable
+being *called* `val_loader` was enough to stop anyone looking.
+
+### 2. A smoke run silently became the served model
+
+Running the documented smoke command (`Rules.md` B7) during the review:
+
+```
+$ lstm-nlp train --config configs/sentiment.yaml --max-steps 3
+$ python -c "from lstm_nlp.api.app import latest_checkpoint; print(latest_checkpoint('sentiment'))"
+   -> runs/sentiment/20260830T091716   macro-F1 0.6997
+      (the real run of the day scored 0.8485, itself superseded by 0.8391)
+```
+
+Resolution picks the newest run; a truncated run writes a directory like any
+other; `train_info` recorded nothing to tell them apart. The API, the CLI's
+default and the whole frontend would have served a half-trained model with
+nothing anywhere saying so. Runs now stamp `max_steps` and resolution skips
+them. An explicit `LSTM_NLP_*_CKPT` still wins — naming a file is a decision,
+and the guard exists to stop an accident, not to overrule a choice.
+
+### Decisions
+1. **Validation is carved out of train, never out of test.** So `val_size` can
+   be tuned without moving a single test row, and every number stays comparable
+   across this change. The test block still holds precisely its 3,463 rows.
+2. **`build_loaders` returns three loaders.** A two-tuple is what let the test
+   loader be handed to `fit` in the first place; three makes the mistake
+   awkward to write.
+3. **Text-gen is left alone, deliberately.** It has the same structure — no
+   held-out block, perplexity measured on the split early stopping used — but
+   S4 asks for "validation perplexity", so the label is honest. Adding a third
+   block would rebuild its vocabulary and move the 2,436 / 7.7981-nat uniform
+   baseline that the entire D2 demonstration is quoted against. Recorded as a
+   known limitation instead; that trade should be made deliberately in Phase 9,
+   not as a side effect of this fix.
+4. **Phase 1's figures are not deleted.** 8,078 / 3,463, vocab 4,505, OOV 5.23%
+   correctly describe the FR-6 split, which this change does not touch. The new
+   4,083 / 5.68% describe the *training block*. Both are true of different
+   things, so both are published.
+
+### Surprises / corrections
+- **The S8 negation test failed, and it was the test that was wrong.** It gated
+  on `gap > 0.15` for one pair. The new model moves that pair 0.984 → 0.900
+  (fails) while moving `service was (not) good` 0.806 → 0.145 and crossing the
+  boundary, and `i am (not) happy` 0.844 → 0.034. Over five pairs, direction is
+  correct on all five and the median gap is 0.394 — negation sensitivity had
+  *improved*. A per-pair threshold was measuring the run; the median measures
+  the model. Rewritten as an aggregate, which is a strengthening, and recorded
+  here because `Rules.md` §11.1 requires saying which of the code and the check
+  was wrong.
+- **The canonical demo pair no longer crosses the boundary.** "the flight was
+  not great" now moves without flipping. The frontend's third preset became
+  "service was not good" so the page shows a crossing beside a movement — but
+  the pair that only moves stayed. Swapping it out to make the demo look better
+  is precisely what the reference did.
+
+### Not fixed, recorded
+- **Over-confident probabilities.** ECE 0.066; inputs scored ~0.75 are positive
+  about 46% of the time. Expected from `class_weighting: balanced` (3.884:1),
+  which is right for macro-F1 and wrong for calibration. The UI calls them
+  probabilities. Fixing it means Platt or isotonic scaling on the validation
+  block — now possible, since there finally is one.
+- **2.48% duplicate leakage** (86 of 3,463 test rows share cleaned text with a
+  training row; 5 texts carry both labels). Corpus noise, not a split bug.
+- **The audit's defect-coverage check is loose** — substring matching over all
+  test files. D10's intended needle `magic` matches nothing, so it is "covered"
+  by the word `config`. The real D10 test exists; the check would not notice its
+  deletion.
+
+### Also
+`LICENSE` removed at the maintainer's request; the code now grants no usage
+rights. The dataset terms in `README.md` stand — they come from Figure Eight and
+Project Gutenberg, not from this repository, and are unaffected by what this
+repo does or does not license. (The Phase 0 entry above still records the file
+as it was created; that remains a true record of what happened then.)
+
+### Audit
+412 tests. Figures updated across `README.md`, `Phases.md`, `Architecture.md`,
+`Design.md` and the frontend; the superseded ones survive only inside explicit
+history notes, which the stale-figure check enforces.
+
+---
 
 ### Next: Phase 8 — Parity & reporting
 `PARITY.md`: the PyTorch metrics against the frozen Keras reference, with every

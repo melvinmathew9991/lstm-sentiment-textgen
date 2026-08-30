@@ -8,6 +8,7 @@ device: auto
 data:
   csv: ../../data/airline_sentiment.csv
   test_size: 0.30
+  val_size: 0.15         # of the TRAIN block: selection needs a set that is not test
   split_seed: 10          # pinned to match the frozen TF reference
   stratify: true          # PRD FR-6; test pos rate 0.2047
   min_freq: 2             # 9,566 train vocab -> 4,505 kept; 5.23% test OOV
