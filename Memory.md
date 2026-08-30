@@ -657,3 +657,137 @@ and 503 paths. `Rules.md` C15 already binds the phase after it — the frontend
 never runs inference — so the API is the *only* inference path from here on,
 and its response shapes are what Phase 7 will render.
 Branch `phase-6-api`, tag `v0.7.0`.
+
+---
+
+## Phase 6 — FastAPI service ✅ complete (2026-08-30)
+
+Six routes, 49 tests, both latency budgets met with ~25-30x headroom. The phase
+closes no defect of its own; its job is to make the earlier phases *reachable*
+without becoming a second implementation of them.
+
+### The proof that there is one inference path
+
+Not an argument — a measurement. `POST /distribution` against the trained model,
+over real HTTP through `uvicorn`:
+
+```
+T=0.2   entropy 1.0287    uniform 7.7981    top word: her  p=0.6108
+T=2.0   entropy 7.4154    uniform 7.7981    top word: her  p=0.0096
+```
+
+Those are the Phase 4 numbers to four decimals, produced by a different process
+through a different transport. And `POST /predict` on "the flight was not great"
+returns 0.751 — the CLI's number, exactly. If the API had acquired its own copy
+of the sampling or preprocessing logic, these would agree to about two decimals
+and drift from there. Agreement at four decimals is what "one code path" looks
+like when it is true rather than intended.
+
+### Verified (real output)
+
+```
+$ python -m uvicorn lstm_nlp.api.app:app --port 8123
+INFO  lstm_nlp.api.app: loaded sentiment checkpoint ...\runs\sentiment\...\best.pt
+INFO  lstm_nlp.api.app: loaded textgen checkpoint   ...\runs\textgen\...\best.pt
+INFO  lstm_nlp.api.app: api ready: 2 model(s) loaded on cpu
+
+$ curl localhost:8123/health
+{"status":"ok","models":{"sentiment":true,"textgen":true},"device":"cpu"}
+
+$ curl -X POST .../predict  -d '{"text":"the flight was not great"}'
+{"label":"positive","label_id":1,
+ "probabilities":{"negative":0.248702,"positive":0.751298},
+ "n_tokens":5,"n_unk":0,"unk_rate":0.0}
+
+$ curl -X POST .../predict  -d '{"text":""}'
+HTTP 422  {"detail":[{"type":"string_too_short","loc":["body","text"], ...}]}
+
+$ curl .../docs                                                    HTTP 200
+```
+
+### Measured (NFR-5, warm, CPU)
+
+```
+POST /predict            median   2.3 ms   p95   3.2 ms    budget  100 ms
+POST /predict/batch x32  median  28.0 ms   p95  31.1 ms    0.88 ms/item
+POST /generate 40 words  median  57.4 ms   p95  79.2 ms    budget 2000 ms
+POST /distribution       median   4.4 ms   p95   6.7 ms
+```
+
+Batching is worth having: 0.88 ms/item against 2.3 ms for a single call, because
+the per-request overhead dominates a model this small.
+
+### Built
+- `api/schemas.py` — the contract as Pydantic classes.
+- `api/app.py` — lifespan loading, six routes, three exception handlers.
+- `tests/test_api.py` — 49 tests.
+
+### Decisions
+1. **The API tests build their own tiny checkpoints.** This is the direct answer
+   to the Phase 5 finding that CI skips 51 tests for want of a trained model.
+   Random weights are fine because nothing here asserts what the model *says*,
+   only what the service does with it — so all 49 run on every push. A contract
+   test that only runs on one laptop is not a contract test.
+2. **The service starts with a checkpoint missing.** A process that refuses to
+   boot because text generation is untrained cannot serve sentiment either, and
+   cannot tell anyone why it is down. `/health` reports per-task availability;
+   the affected routes answer 503 with the recorded reason.
+3. **`DataError` maps to 422, not 500.** A seed of pure punctuation is
+   schema-valid and still unusable. That is the caller's input problem, so it
+   earns the same status as a schema violation.
+4. **The 500 handler is tested by making a route explode.** Same reasoning as
+   the D1 checker's negative controls: a handler that has never fired is
+   indistinguishable from a broken one. The test asserts the body contains
+   neither the exception type, nor its message, nor the word Traceback.
+5. **`load_events` exists so FR-29 can be asserted rather than asserted-about.**
+   The registry counts its own loads; a test fires eighteen requests across
+   three routes and checks the count has not moved.
+
+### The endpoint that was not in the spec
+
+`POST /distribution` is mine, not the contract's. FR-34 requires the frontend to
+chart the next-word distribution at the selected temperature; C15 forbids the
+frontend running inference. No route in `Architecture.md` §6 could supply that
+distribution — so as written, Phase 7 could satisfy FR-34 only by breaking C15.
+
+That is a gap in the specification, not a licence to improvise quietly, so
+§6 has been amended to document the route and say why it exists. Worth noticing
+how it surfaced: not by reading the spec, but by asking what Phase 7 would
+actually have to *do* on its first screen.
+
+### Surprises / corrections
+- **I wrote "402 tests" into the changelog before counting.** The real figure is
+  355 (348 fast). Second predicted number this session — the first was the audit
+  summary in Phase 5. Both were caught by running the thing before committing,
+  which is the only reason the habit is survivable. The tell is identical each
+  time: a number that arrives while writing prose rather than while reading
+  output.
+- **The load lines were invisible under `uvicorn`.** The tests asserted them via
+  `caplog` and passed, but nothing configures logging in a `uvicorn` process, so
+  an operator saw nothing. The passing test was measuring pytest's handler, not
+  the product. Fixed by configuring logging in `lifespan` — *only* when root has
+  no handlers, since stamping on pytest's root handler would silently disable
+  `caplog` for the whole session.
+- **`ErrorResponse` does not describe every error body.** I documented it as the
+  shape of all non-2xx responses; FastAPI answers schema violations with
+  `detail` holding a *list*, which is what §6 specifies and what a form needs to
+  mark the bad field. Same key, different type. Docstring corrected — a client
+  must branch on it, and finding that out from a production traceback is the
+  alternative.
+- **Ruff's `ARG001` was right three times out of six.** Two "unused" handler
+  arguments became genuinely better logs (which route returned 503; what
+  exception class caused a 500), and one flagged a test that depended on the
+  `client` fixture purely for its env-var side effect — real confusion, fixed by
+  depending on `checkpoints` explicitly. Only the FastAPI-mandated signatures
+  were false positives.
+
+### Audit
+**20 pass · 2 warn · 0 fail · 1 skip** with the tree dirty; the warns are the
+working tree and the known `ffc2f5b` subject. 355 tests (348 fast).
+
+### Next: Phase 7 — Streamlit frontend
+Two pages over the HTTP contract, holding no model state (C15) and showing no
+metric without its baseline (C16). The temperature chart is the point of the
+phase: `POST /distribution` already returns entropy beside uniform entropy, so
+the page has to render the comparison rather than compute it.
+Branch `phase-7-frontend`, tag `v0.8.0`.
