@@ -1,0 +1,19 @@
+# Streamlit theme, mirroring the light palette in Design.md section 2.
+#
+# These are the same tokens frontend/theme.py holds; Streamlit needs them here
+# because it paints its own chrome (widgets, sidebar, buttons) before any page
+# code runs. The duplication is the framework's, not a second source of truth --
+# theme.py stays authoritative for anything the app draws itself.
+
+[theme]
+base = "light"
+primaryColor = "#2F6FEB"
+backgroundColor = "#FFFFFF"
+secondaryBackgroundColor = "#F6F7F9"
+textColor = "#14181D"
+
+[server]
+headless = true
+
+[browser]
+gatherUsageStats = false
