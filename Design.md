@@ -38,7 +38,7 @@ Semantic tokens, not colour names, so the theme can shift without touching page 
 | `negative` | `#C4392B` | Negative sentiment |
 | `positive` | `#1F8A5B` | Positive sentiment |
 | `warn` | `#B26A00` | High `unk_rate`, degraded state |
-| `neutral` | `#8A94A2` | Baseline reference marks |
+| `neutral` | `#7B8592` | Baseline reference marks |
 
 ### Dark
 
@@ -60,6 +60,7 @@ Semantic tokens, not colour names, so the theme can shift without touching page 
 
 - **Sentiment colour is reserved.** `negative` / `positive` appear *only* for class identity — never as generic status colours. A red error message uses `warn`, not `negative`, so red always means "the model said negative".
 - **Contrast:** all text/background pairs meet WCAG AA (≥ 4.5:1 body, ≥ 3:1 large). Verified pairs: `text`/`bg` 16.1:1, `text_muted`/`bg` 5.8:1, `accent`/`bg` 5.2:1.
+- **Chart marks clear 3:1 against `surface`,** the floor a non-text mark needs to be distinguishable. Measured in Phase 7: `accent`/`surface` 4.26:1 light and 5.35:1 dark; `neutral`/`surface` 3.49:1 light and 3.70:1 dark. Light `neutral` was **#8A94A2** until that measurement — 2.86:1, under the floor — and is now `#7B8592`, which still reads gray (OKLCH chroma 0.023) as a reference mark must.
 - **Colour is never the only signal.** Sentiment carries a label and a value; `unk_rate` carries a count; chart series carry labels.
 
 ---
