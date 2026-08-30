@@ -209,6 +209,9 @@ Matching the Keras model's 0.909 validation accuracy. That number was produced b
 
 ## 7. Document set
 
+All steering documents live in `docs/`. `README.md` and `CHANGELOG.md` stay at
+the repository root, where GitHub and Keep-a-Changelog respectively expect them.
+
 Decided 2026-08-29:
 
 | Doc | Status | Rationale |

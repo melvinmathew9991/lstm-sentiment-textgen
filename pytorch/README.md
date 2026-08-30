@@ -3,10 +3,10 @@
 Many-to-one LSTMs for sentiment classification and next-word generation, in
 PyTorch. CPU only.
 
-Design and rationale live in the root documents — `PRD.md` (requirements),
-`Architecture.md` (structure), `Rules.md` (constraints), `Design.md` (the UI),
-`PARITY.md` (how this compares to the reference it replaces). This file is
-commands.
+Design and rationale live in `docs/` at the repository root — `PRD.md`
+(requirements), `Architecture.md` (structure), `Rules.md` (constraints),
+`Design.md` (the UI), `PARITY.md` (how this compares to the reference it
+replaces). This file is commands.
 
 ## Install
 
