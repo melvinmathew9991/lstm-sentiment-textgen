@@ -166,5 +166,5 @@ The original course materials (`modular_code/`, `notebook/`, the solution PDF) a
 | 5 · CLI | ✅ | **D1**, D10 |
 | 6 · FastAPI backend | ✅ | — |
 | 7 · Streamlit frontend | ✅ | — |
-| 8 · Parity report | ⬜ | D11 |
+| 8 · Parity report | ✅ | D11 |
 | 9 · Hardening | ⬜ | optional |

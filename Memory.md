@@ -1071,7 +1071,89 @@ history notes, which the stale-figure check enforces.
 
 ---
 
-### Next: Phase 8 — Parity & reporting
+---
+
+## Phase 8 — Parity & reporting ✅ complete (2026-08-30)
+
+**Closes D11**, and with it the ledger. `PARITY.md` exists, all eleven defects
+are marked closed against a named regression test, and every figure in it is
+reproducible by a command printed beside it.
+
+### The thing worth saying first
+
+The reference's numbers cannot be re-measured. `sentiment_model.h5` holds
+weights and nothing else — `word_to_int`, `int_to_word` and `sequence_length`
+were never persisted — so the input space those weights expect cannot be
+reconstructed and the file cannot be loaded. That is D8, and writing the parity
+report is what made me realise it outranks even D2: a wrong number can be
+corrected, but an unloadable artifact makes every number it produced
+permanently unauditable. `PARITY.md` opens on that rather than on a metrics
+table.
+
+### The 0.909 problem, handled head-on
+
+The reference recorded 0.909 validation accuracy. Ours is 0.8926. Read naively
+it beats us, and the honest response is arithmetic rather than adjectives:
+
+- the corpus is 79.53% negative, so answering *negative* every time scores
+  0.7953 — its lift is +0.114, ours +0.0973, and it never printed a baseline;
+- its figure was measured on negation-stripped text (D3), a different task;
+- it is a **final-epoch** validation score with no early stopping (D5), and its
+  own log shows `val_loss` climbing 0.215 → 0.526 while training loss fell;
+- ours is held out, theirs is the set it was watching.
+
+Four separate reasons, none of which is "our model is better". `PRD.md` §6.3
+already said matching 0.909 was not a target; this documents why with numbers.
+
+### Section 5 is about us
+
+A parity report that only audits the other side is not an audit. `PARITY.md`
+§5 lists the two defects we introduced and fixed in 0.8.1 — selection on the
+test split (+0.0094 optimism) and a smoke run reaching the API (0.6997 served)
+— and §6 lists five limitations that remain: ECE 0.066 over-confidence, 2.48%
+duplicate rows, no held-out block for text-gen, negation that does not always
+cross the boundary, and the audit's own loose defect-coverage check.
+
+Writing §5 was uncomfortable in a way that suggests it is the most valuable
+section in the document.
+
+### Built
+- `PARITY.md` — 8 sections: the unloadable artifact, sentiment, text-gen, the
+  D2 side-by-side, resources, our own defects, known limitations, the ledger.
+- `pytorch/README.md` — quickstart only, per the phase task.
+- `PARITY.md` registered in the audit's `DOCS`, so it is held to the same
+  stale-figure, terminology and baseline checks as everything else. A parity
+  report exempt from the project's own standards would be an odd artifact.
+
+### Decisions
+1. **Reference figures are labelled "recorded", never "measured".** Every one is
+   what the reference said about itself. The distinction is the whole point of
+   §0 and the column header carries it.
+2. **D11 needed no code change.** The terminology sweep found no uncorrected use
+   of the reference's "bag of words" phrasing anywhere in the new tree — it is
+   an ordered integer-index sequence, never that — and the audit check has been
+   enforcing it since Phase 0, which is what a check is for. Closed by
+   `scripts/audit.py` rather than by a test, and the ledger says so rather than
+   inventing a test name.
+3. **The generated samples are pinned with `--rng-seed 42`.** A side-by-side
+   comparison nobody can reproduce would repeat the reference's mistake in the
+   document meant to catalogue it.
+
+### Verified
+All thirteen test names cited in the ledger were checked to exist before the
+document was committed. The one defect with no test — D11 — cites the audit
+check instead, because claiming a test that does not exist in the document that
+audits claims would be its own small joke.
+
+### Audit
+**21 pass · 2 warn · 0 fail · 0 skip.** 412 tests.
+
+### Next: Phase 9 — Hardening (optional)
+The list is already written, in `PARITY.md` §6: calibrate the probabilities on
+the validation block that now exists, deduplicate before splitting, give
+text-gen a held-out block (accepting that it moves the 2,436 / 7.7981-nat
+baseline), tighten the audit's defect-coverage needles, and make `ruff` blocking.
+Branch `phase-9-hardening`, tag `v1.0.0`.
 `PARITY.md`: the PyTorch metrics against the frozen Keras reference, with every
 delta explained, and all eleven defects marked closed (D11, S16). The numbers
 already exist across these entries; the work is assembling them honestly,

@@ -8,8 +8,43 @@ Defect IDs (D1-D11) refer to `PRD.md` section 1.1.
 ## [Unreleased]
 
 ### Planned
-- Phase 8: parity report
 - Phase 9: hardening
+
+## [0.9.0] - 2026-08-30 - Phase 8: Parity & reporting
+
+Closes **D11**, and with it the ledger: all eleven defects are marked closed
+against a named regression test.
+
+### Added
+- **`PARITY.md`** -- the rebuild against the frozen TensorFlow reference, every
+  figure beside its baseline and every claim reproducible by a pasted command.
+- `pytorch/README.md` -- quickstart only. Commands, environment variables, and
+  where the design documents are.
+
+### The comparison that cannot be run
+The reference's numbers are quoted, never re-measured, and that is not a choice.
+`sentiment_model.h5` holds weights and nothing else -- no vocabulary, no
+sequence length -- so the input space cannot be reconstructed and the artifact
+cannot be loaded. That is D8, and it makes every number the reference reported
+permanently unauditable. `PARITY.md` opens with it, because it outranks even D2.
+
+### On the reference's 0.909
+Read naively it beats our 0.8926. It is not a comparison: accuracy is the wrong
+metric on a 79.53%-negative corpus (D4), the figure was produced on
+negation-stripped text (D3), it is a final-epoch validation score with no early
+stopping (D5), and it carries no baseline. Ours is held out. `PRD.md` section
+6.3 already said matching it was not a target; `PARITY.md` shows the arithmetic.
+
+### Reported against ourselves
+`PARITY.md` section 5 lists the two defects **we** introduced and fixed in
+0.8.1 -- selection on the test split, and a smoke run reaching the API -- with
+their measured cost. Section 6 lists five limitations that remain, including
+ECE 0.066 over-confidence and 2.48% duplicate rows across the split. A report
+that only audits the other side is not an audit.
+
+### Changed
+- `PARITY.md` is registered with `scripts/audit.py`, so it is held to the same
+  stale-figure, terminology and baseline checks as every other document.
 
 ## [0.8.1] - 2026-08-30 - Held-out evaluation, and a serving guard
 

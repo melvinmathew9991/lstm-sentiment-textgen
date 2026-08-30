@@ -354,7 +354,7 @@ def check_todos() -> Result:
 # --------------------------------------------------------------------------- #
 
 DOCS = ["PRD.md", "Architecture.md", "Rules.md", "Phases.md", "Design.md",
-        "README.md", "Memory.md", "CHANGELOG.md"]
+        "README.md", "Memory.md", "CHANGELOG.md", "PARITY.md"]
 
 
 def check_docs_present() -> Result:
